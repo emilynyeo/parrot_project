@@ -7,3 +7,8 @@
 .txt
 .rds
 .png
+*.csv
+*.txt
+*.png
+*.rds
+*.xlsx
