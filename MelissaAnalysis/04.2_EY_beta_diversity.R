@@ -122,7 +122,9 @@ gg_bray16WITHREN_givenprobiotics_nomystery
 #ggsave("04_beta_diversity/gg_bray16WITHREN_givenprobiotics_nomystery.png", gg_bray16WITHREN_givenprobiotics_nomystery, height=5, width=7)
 
 # Captive and wild only
-gg_bray16WITHREN_givenprobiotics_nomysterynoseized <- plot_ordination(phyloseq16all, phylo16all_ord, type = "samples", color = "Captive.Wild", shape = "Given.probiotic")+
+gg_bray16WITHREN_givenprobiotics_nomysterynoseized <- plot_ordination(phyloseq16all, phylo16all_ord, 
+                                                                      type = "samples", color = "Captive.Wild", 
+                                                                      shape = "Given.probiotic")+
   scale_shape_manual(values=c(19,21)) +
   scale_color_manual(values=c(Captive="purple4", "Wild, free ranging"="seagreen", "Wild, seized from traffickers"=rgb(0,0,0,0),
                               "Crate 1: Unknown origin" = rgb(0,0,0,0), "Crate 2: Unknown origin" = rgb(0,0,0,0)))+
@@ -131,8 +133,11 @@ gg_bray16WITHREN_givenprobiotics_nomysterynoseized <- plot_ordination(phyloseq16
 gg_bray16WITHREN_givenprobiotics_nomysterynoseized
 #ggsave("04_beta_diversity/gg_bray16WITHREN_givenprobiotics_nomysterynoseized.png", gg_bray16WITHREN_givenprobiotics_nomysterynoseized, height=5, width=7)
 
+
 # Captive wild mystery
-gg_bray16WITHREN_givenprobiotics_noseized <- plot_ordination(phyloseq16all, phylo16all_ord, type = "samples", color = "Captive.Wild", shape = "Given.probiotic")+
+gg_bray16WITHREN_givenprobiotics_noseized <- plot_ordination(phyloseq16all, phylo16all_ord, 
+                                                             type = "samples", color = "Captive.Wild", 
+                                                             shape = "Given.probiotic")+
   scale_shape_manual(values=c(19,21)) +
   scale_color_manual(values=c(Captive="purple4", "Wild, free ranging"="seagreen", "Wild, seized from traffickers"=rgb(0,0,0,0),
                               "Crate 1: Unknown origin" = "magenta3", "Crate 2: Unknown origin" = "firebrick3"))+
@@ -166,7 +171,7 @@ plot_ordination(phyloseq18n_c1000, phylo18n_ord, type = "samples", color = "Capt
   labs(subtitle=paste0("Eukaryote (Stress: ", round(phylo18m_ord$stress, 2),")")) +
   labs(shape="Tube type", col="Captive\nor wild") 
 
-
+# ****
 phylo18n_ord <- ordinate(phyloseq18all, method = "NMDS", distance = "bray")
 plot_ordination(phyloseq18all, phylo18n_ord, type = "samples", color = "Captive.Wild", shape = "Tube.type")+
   scale_shape_manual(values=c(19,21)) +

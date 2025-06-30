@@ -55,7 +55,7 @@ gg_alpha16_sourceprobiotic <- alpha_16 %>%
   labs(col="Captive\nor wild", shape="Microbiome\ntreatment") +ylab("Bacterial Diversity") + xlab("Captive or wild") +
   scale_color_manual(values=captivewild_legend) +
   scale_shape_manual(values=c(19,21))
-gg_alpha16_sourceprobiotic + stat_compare_means(method = "anova")
+gg_alpha16_sourceprobiotic 
 #ggsave(filename = "03_alpha_diversity/gg_alpha16_sourceprobiotic.png",gg_alpha16_sourceprobiotic,  height=5, width=8)
 
 # Just original ones
@@ -70,7 +70,7 @@ gg_alpha16n_sourceprobiotic <- alpha_16 %>%
   labs(col="Captive\nor wild", shape="Microbiome\ntreatment") +ylab("Bacterial Diversity") + xlab("Captive or wild") +
   scale_color_manual(values=captivewild_legend) +
   scale_shape_manual(values=c(19,21))
-gg_alpha16n_sourceprobiotic
+gg_alpha16n_sourceprobiotic 
 #ggsave(filename = "03_alpha_diversity/gg_alpha16n_sourceprobiotic.png",gg_alpha16n_sourceprobiotic,  height=5, width=8)
 
 alpha16n_stats <- compare_means(value_adj ~ Captive.Wild, data = alpha_16 %>%   
@@ -312,7 +312,7 @@ gg_readdepth_div_16 <- alpha_16 %>%
   ylab("16S diversity or eveness") + xlab("Read depth") +
   scale_x_log10()
 gg_readdepth_div_16
-ggsave(filename="03_alpha_diversity/gg_readdepth_div_16.png", gg_readdepth_div_16, height=8, width=5)
+#ggsave(filename="03_alpha_diversity/gg_readdepth_div_16.png", gg_readdepth_div_16, height=8, width=5)
 
 summary(lm(value ~ ReadDepth18n, data=alpha_18 %>%
              filter(Type=="All eukaryotes") %>% filter(variable == "Chao1")))
@@ -329,7 +329,7 @@ gg_readdepth_div_18 <- alpha_18 %>%
   ylab("18S diversity or eveness") + xlab("Read depth") +
   scale_x_log10()
 gg_readdepth_div_18
-ggsave(filename="03_alpha_diversity/gg_readdepth_div_18.png", gg_readdepth_div_18, height=8, width=5)
+#ggsave(filename="03_alpha_diversity/gg_readdepth_div_18.png", gg_readdepth_div_18, height=8, width=5)
 
 ##### Try rarefying #####
 phyloseq16_r17000 <- rarefy_even_depth(phyloseq16nano, sample.size = 17000, rngseed = 42345, trimOTUs = TRUE)
@@ -349,7 +349,7 @@ gg_alpha16_r17000_sourceprobiotic <- alpha_16_r17000 %>%
   scale_shape_manual(values=c(19,21)) +
   labs(pch="Microbiome\ntreatment", col="Captive\nor wild")
 gg_alpha16_r17000_sourceprobiotic
-ggsave(filename = "03_alpha_diversity/gg_alpha16_r17000_sourceprobiotic.png", gg_alpha16_r17000_sourceprobiotic, height=5, width=8)
+#ggsave(filename = "03_alpha_diversity/gg_alpha16_r17000_sourceprobiotic.png", gg_alpha16_r17000_sourceprobiotic, height=5, width=8)
 
 ### Doesn't look any different from non-rarefied, 18S threshold is sort of arbitrary here because values go super low
 hist(colSums(otu_table(phyloseq18nano_nohost)))
@@ -370,7 +370,7 @@ gg_alpha18_r1000_sourceprobiotic <- alpha_18_r1000 %>%
   scale_shape_manual(values=c(19,21)) +
   labs(pch="Microbiome\ntreatment", col="Captive\nor wild")
 gg_alpha18_r1000_sourceprobiotic
-ggsave(filename = "03_alpha_diversity/gg_alpha18_r1000_sourceprobiotic.png", gg_alpha18_r1000_sourceprobiotic, height=5, width=8)
+#ggsave(filename = "03_alpha_diversity/gg_alpha18_r1000_sourceprobiotic.png", gg_alpha18_r1000_sourceprobiotic, height=5, width=8)
 
 
 ######### FIX COLOURS FOR UNKNOWN TUBES ############
@@ -388,15 +388,19 @@ gg_alpha16_tubelocation <- alpha_16 %>%
   labs(col="Collection\nlocation") +ylab("Bacterial Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha16_tubelocation
-ggsave("03_alpha_diversity/gg_alpha16_tubelocation.png", gg_alpha16_tubelocation, height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha16_tubelocation.png", gg_alpha16_tubelocation, height=5, width=8)
 
 tube16_stats <- compare_means(value_adj ~ Tube.type, data = alpha_16,
                               # p.adjust.method="fdr",
                                method="t.test",
                                group.by = "variable_adj") %>%
-  mutate(p.signif.adj = ifelse(p.adj>=0.05, "ns", ifelse(p.adj>=0.01, "*", ifelse(p.adj>=0.001, "**", ifelse(p.adj>=0.001, "***", "****"))))) %>%
+  mutate(p.signif.adj = ifelse(p.adj>=0.05, "ns", 
+                               ifelse(p.adj>=0.01, "*", 
+                                      ifelse(p.adj>=0.001, "**", 
+                                             ifelse(p.adj>=0.001, "***", "****"))))) %>%
   mutate(y.position = c(250,4.5,1.75))
-write.table(tube16_stats, file="03_alpha_diversity/tube16_stats.txt", quote = FALSE, row.names = FALSE, sep="\t")
+#write.table(tube16_stats, file="03_alpha_diversity/tube16_stats.txt", quote = FALSE, row.names = FALSE, sep="\t")
+
 # tube16_comp <- list(c("5ml RNAlater factory", "SANBI 10ml conical"))
 gg_alpha16_tubelocation_wstats <- alpha_16 %>%
   mutate(Country = ifelse(is.na(Country), "Unknown", Country)) %>%
@@ -412,7 +416,7 @@ gg_alpha16_tubelocation_wstats <- alpha_16 %>%
   labs(col="Collection\nlocation") +ylab("Bacterial Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha16_tubelocation_wstats
-ggsave(filename = "03_alpha_diversity/gg_alpha16_tubelocation_wstats.png",gg_alpha16_tubelocation_wstats,  height=5, width=8)
+#ggsave(filename = "03_alpha_diversity/gg_alpha16_tubelocation_wstats.png",gg_alpha16_tubelocation_wstats,  height=5, width=8)
 
 
 gg_alpha18_tubelocation_nohost <- alpha_18_nohost %>%
@@ -428,7 +432,7 @@ gg_alpha18_tubelocation_nohost <- alpha_18_nohost %>%
   labs(col="Collection\nlocation") +ylab("Eukaryote Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha18_tubelocation_nohost
-ggsave("03_alpha_diversity/gg_alpha18_tubelocation_nohost.png", gg_alpha18_tubelocation_nohost, height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha18_tubelocation_nohost.png", gg_alpha18_tubelocation_nohost, height=5, width=8)
 
 gg_alpha18_tubelocation_microeuk <- alpha_18_microeuk %>%
   mutate(Country = ifelse(is.na(Country), "Unknown", Country)) %>%
@@ -443,7 +447,7 @@ gg_alpha18_tubelocation_microeuk <- alpha_18_microeuk %>%
   labs(col="Collection\nlocation") +ylab("Microeukaryote Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha18_tubelocation_microeuk
-ggsave("03_alpha_diversity/gg_alpha18_tubelocation_microeuk.png", gg_alpha18_tubelocation_microeuk, height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha18_tubelocation_microeuk.png", gg_alpha18_tubelocation_microeuk, height=5, width=8)
 
 
 gg_alpha18_tubelocation_plants <- alpha_18_plants %>%
@@ -459,16 +463,19 @@ gg_alpha18_tubelocation_plants <- alpha_18_plants %>%
   labs(col="Collection\nlocation") +ylab("Plant Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha18_tubelocation_plants
-ggsave("03_alpha_diversity/gg_alpha18_tubelocation_plants.png", gg_alpha18_tubelocation_plants, height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha18_tubelocation_plants.png", gg_alpha18_tubelocation_plants, height=5, width=8)
 
 ######## STATS BELOW ARE BROKEN ########
 tube18_nohost_stats <- compare_means(value_adj ~ Tube.type, data = alpha_18_nohost %>% filter(Country=="South Africa"),
                               # p.adjust.method="fdr",
                               method="t.test",
                               group.by = "variable_adj") %>%
-  mutate(p.signif.adj = ifelse(p.adj>=0.05, "ns", ifelse(p.adj>=0.01, "*", ifelse(p.adj>=0.001, "**", ifelse(p.adj>=0.001, "***", "****"))))) %>%
+  mutate(p.signif.adj = ifelse(p.adj>=0.05, "ns", ifelse(p.adj>=0.01, "*", 
+                                                         ifelse(p.adj>=0.001, "**", 
+                                                                ifelse(p.adj>=0.001, "***", "****"))))) %>%
   mutate(y.position = c(250,4,1.5))
-write.table(tube18_nohost_stats, file="03_alpha_diversity/tube18_nohost_stats.txt", quote = FALSE, row.names = FALSE, sep="\t")
+#write.table(tube18_nohost_stats, file="03_alpha_diversity/tube18_nohost_stats.txt", quote = FALSE, row.names = FALSE, sep="\t")
+
 # tube18_comp <- list(c("5ml RNAlater factory", "SANBI 10ml conical"))
 gg_alpha18_tubelocation_nohost_wstats <- alpha_18_nohost %>%
   mutate(value_adj = ifelse(variable=="InvSimpson", log10(value), as.numeric(value))) %>%
@@ -483,7 +490,7 @@ gg_alpha18_tubelocation_nohost_wstats <- alpha_18_nohost %>%
   labs(col="Collection\nlocation") +ylab("Bacterial Diversity") + xlab("DNA preservation tube type") +
   scale_color_manual(values=location_legend)
 gg_alpha18_tubelocation_nohost_wstats
-ggsave(filename = "03_alpha_diversity/gg_alpha18_tubelocation_nohost_wstats.png",gg_alpha18_tubelocation_nohost_wstats,  height=5, width=8)
+#ggsave(filename = "03_alpha_diversity/gg_alpha18_tubelocation_nohost_wstats.png",gg_alpha18_tubelocation_nohost_wstats,  height=5, width=8)
 
 
 gg_alpha16_datesource <- alpha_16 %>%
@@ -499,7 +506,7 @@ gg_alpha16_datesource <- alpha_16 %>%
   labs(col="Captive\nor wild") +ylab("Bacterial Diversity") + xlab("Date sampled") +
   scale_color_manual(values=captivewild_legend)
 gg_alpha16_datesource
-ggsave("03_alpha_diversity/gg_alpha16_datesource.png",gg_alpha16_datesource,  height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha16_datesource.png",gg_alpha16_datesource,  height=5, width=8)
 
 gg_alpha18_datesource <- alpha_18_nohost %>%
   mutate(value_adj = ifelse(variable=="InvSimpson", log10(value), as.numeric(value))) %>%
@@ -514,5 +521,5 @@ gg_alpha18_datesource <- alpha_18_nohost %>%
   labs(col="Captive\nor wild") +ylab("Eukaryote Diversity") + xlab("Date sampled") +
   scale_color_manual(values=captivewild_legend)
 gg_alpha18_datesource
-ggsave("03_alpha_diversity/gg_alpha18_datesource.png",gg_alpha18_datesource,  height=5, width=8)
+#ggsave("03_alpha_diversity/gg_alpha18_datesource.png",gg_alpha18_datesource,  height=5, width=8)
 
