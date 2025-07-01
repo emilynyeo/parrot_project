@@ -1,7 +1,7 @@
 # Which Taxa drive the differences between groups? 
 
 #### Load libraries ####
-pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC)
+pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2)
                
 #dir.create("04_beta_diversity")
 #### Load data ####
@@ -63,44 +63,6 @@ p16n_all_anc_1crate <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
                   
 res <- p16n_all_anc_1crate$res
 
-# https://www.yanh.org/2021/01/01/microbiome-r/#differential-abundance-analysis
-# select the bottom 20 with lowest p values
-res.or_p <- rownames(res$q_val["body.sitetongue"])[base::order(res$q_val[,"body.sitetongue"])]
-taxa_sig <- res.or_p[1:20]
-ps.taxa.rel.sig <- prune_taxa(taxa_sig, ps.taxa.rel)
-
-# Only keep gut and tongue samples 
-ps.taxa.rel.sig <- prune_samples(colnames(otu_table(ps.taxa.sub)), ps.taxa.rel.sig)
-
-matrix <- as.matrix(data.frame(otu_table(ps.taxa.rel.sig)))
-rownames(matrix) <- as.character(tax_table(ps.taxa.rel.sig)[, "Species"])
-metadata_sub <- data.frame(sample_data(ps.taxa.rel.sig))
-
-# Define the annotation color for columns and rows
-annotation_col = data.frame(
-  Subject = as.factor(metadata_sub$subject), 
-  `Body site` = as.factor(metadata_sub$body.site), 
-  check.names = FALSE
-)
-rownames(annotation_col) = rownames(metadata_sub)
-
-annotation_row = data.frame(
-  Phylum = as.factor(tax_table(ps.taxa.rel.sig)[, "Phylum"])
-)
-rownames(annotation_row) = rownames(matrix)
-
-# ann_color should be named vectors
-phylum_col = RColorBrewer::brewer.pal(length(levels(annotation_row$Phylum)), "Paired")
-names(phylum_col) = levels(annotation_row$Phylum)
-ann_colors = list(
-  Subject = c(`subject-1` = "red", `subject-2` = "blue"),
-  `Body site` = c(`gut` = "purple", tongue = "yellow"),
-  Phylum = phylum_col
-)
-ComplexHeatmap::pheatmap(matrix, 
-                         annotation_col = annotation_col, 
-                         annotation_row = annotation_row, 
-                         annotation_colors = ann_colors)
 # Plot 
 plot_ancombc_pq(
   phyloseq16all,
@@ -115,11 +77,224 @@ plot_ancombc_pq(
   add_hline_cut_lfc = NULL
 )
 
-save(p16n_all_anc, file = "05_taxa_driving_groups/ancom_16sn.RData")
+save(p16n_all_anc, 
+     p16n_all_anc_1crate,
+     file = "05_taxa_driving_groups/ancom_16sn.RData")
 
 # MICROBIOME WORKSHOP
 ### https://yulab-smu.top/MicrobiotaProcessWorkshop/articles/MicrobiotaProcessWorkshop.html
-
+BiocManager::install(c("GO.db", "impute", "preprocessCore"))
 library(coin)
 library(MicrobiotaProcess)
 library(patchwork)
+library(reshape2) # Flexibly Reshape Data: A Reboot of the Reshape Package.
+library(ggnewscale)
+library(VennDiagram)
+library(UpSetR)
+library(gridExtra)
+library(grid)
+library(WGCNA)
+
+# ALPHA D and READ DEPTH
+set.seed(1024)
+ps <- phyloseq16all
+rareres <- get_rarecurve(obj=ps, chunks=400)
+
+prare1 <- ggrarecurve(obj=rareres, factorNames="cap_wild_crate",
+                      indexNames=c("Observe", "Chao1", "ACE")
+) +
+  scale_fill_manual(values=c("#00AED7", "#FD9347","seagreen","purple4"))+
+  scale_color_manual(values=c("#00AED7", "#FD9347","seagreen","purple4"))+
+  theme_bw()+
+  theme(axis.text=element_text(size=8), panel.grid=element_blank(),
+        strip.background = element_rect(colour=NA,fill="grey"),
+        strip.text.x = element_text(face="bold"))          
+
+prare2 <- ggrarecurve(obj=rareres,
+                      factorNames="cap_wild_crate",
+                      shadow=FALSE,
+                      indexNames=c("Observe", "Chao1", "ACE")
+) +
+  scale_color_manual(values=c("#00AED7", "#FD9347","seagreen","purple4"))+
+  coord_cartesian(ylim = c(0, 400)) +
+  theme_bw()+
+  theme(axis.text=element_text(size=8), panel.grid=element_blank(),
+        strip.background = element_rect(colour=NA,fill="grey"),
+        strip.text.x = element_text(face="bold"))
+ggsave(filename = "05_taxa_driving_groups/16s_alpha_reads.png",prare2, height=5, width=8)
+prare1 / prare2
+
+# OVERLAPPING TAXA
+
+vennlist <- get_vennlist(obj=ps, factorNames="cap_wild_crate")
+upsetda <- get_upset(obj=ps, factorNames="cap_wild_crate")
+
+vennp <- venn.diagram(vennlist,
+                      height=5,
+                      width=5, 
+                      filename=NULL, 
+                      fill=c("#00AED7", "#FD9347", "seagreen", "purple4"),
+                      cat.col=c("#00AED7", "#FD9347", "seagreen", "purple4"),
+                      alpha = 0.85, 
+                      fontfamily = "serif",
+                      fontface = "bold",
+                      cex = 1.2,
+                      cat.cex = 1.3,
+                      cat.default.pos = "outer",
+                      cat.dist=0.25,
+                      margin = 0.1, 
+                      lwd = 3,
+                      lty ='dotted',
+                      imagetype = "svg")
+grid::grid.draw(vennp)
+ggsave(filename = "05_taxa_driving_groups/16s_taxa_overlap.png",vennp, height=5, width=8)
+
+# PCOA's
+
+# distmethod: "unifrac","wunifrac","manhattan","euclidean","canberra","bray","kulczynski" (vegdist, dist options)
+pcoares <- get_pcoa(obj=ps, distmethod="bray", method="hellinger")
+
+# Visualizing the result
+pcoaplot1 <- ggordpoint(obj=pcoares, biplot=TRUE, speciesannot=TRUE,
+                        factorNames=c("cap_wild_crate"), ellipse=TRUE) +
+  scale_color_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4")) +
+  scale_fill_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4"))
+ggsave(filename = "05_taxa_driving_groups/16s_pcoaplot1.png",pcoaplot1, height=5, width=8)
+
+# first and third principal co-ordinates
+pcoaplot2 <- ggordpoint(obj=pcoares, pc=c(1, 3), biplot=TRUE, speciesannot=TRUE,
+                        factorNames=c("cap_wild_crate"), ellipse=TRUE) +
+  scale_color_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4")) +
+  scale_fill_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4"))
+ggsave(filename = "05_taxa_driving_groups/16s_pcoaplot2.png",pcoaplot2, height=5, width=8)
+pcoaplot1 | pcoaplot2
+
+# PERMANOVA
+distme <- get_dist(ps, distmethod ="bray", method="hellinger")
+sampleda <- data.frame(sample_data(ps), check.names=FALSE)
+sampleda <- sampleda[match(colnames(as.matrix(distme)),rownames(sampleda)),,drop=FALSE]
+sampleda$Group <- factor(sampleda$cap_wild_crate)
+set.seed(1024)
+adores <- adonis2(distme ~ cap_wild_crate, data=sampleda, permutation=9999)
+data.frame(adores$aov.tab)
+print(adores)
+
+Table_grob <- tableGrob(adores, rows = NULL, theme = ttheme_default(
+  core = list(fg_params = list(hjust = 0.5)),
+  colhead = list(fg_params = list(fontface = 2, hjust = 0.5))
+))
+
+# Save to PNG
+png("05_taxa_driving_groups/permanova_16all.png", width = 7, height = 5)
+grid.draw(Table_grob)
+dev.off()
+
+# BIOMARKER DISCOVERY 
+
+set.seed(1024)
+deres <- diff_analysis(obj = ps, classgroup = "cap_wild_crate",
+                       mlfun = "lda",
+                       filtermod = "pvalue",
+                       firstcomfun = "kruskal_test",
+                       firstalpha = 0.05,
+                       strictmod = TRUE,
+                       secondcomfun = "wilcox_test",
+                       subclmin = 3,
+                       subclwilc = TRUE,
+                       secondalpha = 0.01,
+                       lda=3)
+deres
+
+# Biomarker Abundance (r) & conf. interval of effect size (LDA or MDA) of biomarker. The bigger confident interval shows that the biomarker is more fluctuant, owing to the influence of samples number.
+
+top30_feat <- deres@result %>%
+  arrange(desc(LDAmean)) %>%
+  slice_head(n = 30) %>% pull(f)
+deres_top30 <- deres
+deres_top30@result <- deres@result %>% filter(f %in% top30_feat)
+
+diffbox <- ggdiffbox(obj=deres_top30, box_notch=FALSE, 
+                     colorlist=c("#00AED7", "#FD9347", "seagreen", "purple4"), 
+                     l_xlabtext="relative abundance")
+diffbox
+ggsave(filename = "05_taxa_driving_groups/16s_biomarker_abundance_LDA.png",diffbox, height=7, width=8)
+
+# Confidence interval of effect
+
+top40_feat <- deres@result %>%
+  arrange(desc(LDAmean)) %>%
+  slice_head(n = 40) %>% pull(f)
+deres_top40 <- deres
+deres_top40@result <- deres@result %>% filter(f %in% top40_feat)
+
+es_p <- ggeffectsize(obj=deres_top40, 
+                     lineheight=0.1,
+                     linewidth=0.3) + 
+  scale_color_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4")) 
+
+es_p
+ggsave(filename = "05_taxa_driving_groups/16s_biomarker_top_LDA.png",es_p, height=5, width=8)
+
+## CORRELATION OF TAXONOMY
+
+genustab <- get_taxadf(ps, taxlevel=6)
+genustab <- data.frame(t(otu_table(genustab)), check.names=FALSE)
+genustab <- data.frame(apply(genustab, 2, function(x)x/sum(x)), check.names=FALSE)
+
+cortest <- WGCNA::corAndPvalue(genustab, method="spearman", alternative="two.sided")
+cortest$cor[upper.tri(cortest$cor, diag = TRUE)] <- NA
+cortest$p[upper.tri(cortest$p, diag = TRUE)] <- NA
+cortab1 <- na.omit(melt(t(cortest$cor))) %>% rename(from=Var1,to=Var2,cor=value)
+corptab1 <- na.omit(melt(t(cortest$p))) %>% rename(pvalue=value)
+cortab1$fdr <- p.adjust(corptab1$pvalue, method="fdr")
+
+cortab1 <- cortab1 %>% mutate(correlation=case_when(cor>0 ~ "positive",cor < 0 ~ "negative",TRUE ~ "No"))
+cortab2 <- cortab1 %>% filter(fdr <= 0.05) %>% filter(cor <= -0.5 | cor >= 0.8)
+
+
+p <- ggdiffclade(
+  obj=deres,
+  alpha=0.3,
+  linewd=0.25,
+  skpointsize=0.2,
+  layout="inward_circular",
+  taxlevel=7,
+  cladetext=0,
+  setColors=FALSE,
+  xlim=16
+) +
+  scale_fill_manual(values=c("#00AED7", "#FD9347", "seagreen", "purple4"),
+                    guide=guide_legend(keywidth=0.5,
+                                       keyheight=0.5,
+                                       order=3,
+                                       override.aes=list(alpha=1))
+  ) +
+  scale_size_continuous(range=c(1, 3),
+                        guide=guide_legend(keywidth=0.5,keyheight=0.5,order=4,
+                                           override.aes=list(shape=21))) +
+  scale_colour_manual(values=rep("white", 100),guide="none")
+
+p2 <- p +
+  new_scale_color() +
+  new_scale("size") +
+  geom_tiplab(size=1, hjust=1) +
+  geom_taxalink(
+    data=cortab2,
+    mapping=aes(taxa1=from,
+                taxa2=to,
+                colour=correlation,
+                size=abs(cor)),
+    alpha=0.4,
+    ncp=10,
+    hratio=1,
+    offset=1.2
+  ) +
+  scale_size_continuous(range = c(0.2, 1),
+                        guide=guide_legend(keywidth=1, keyheight=0.5,
+                                           order=1, override.aes=list(alpha=1))
+  ) +
+  scale_colour_manual(values=c("chocolate2", "#009E73", "seagreen", "purple4"),
+                      guide=guide_legend(keywidth=0.5, keyheight=0.5,
+                                         order=2, override.aes=list(alpha=1, size=1)))
+p2
+cortab2
