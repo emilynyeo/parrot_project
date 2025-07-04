@@ -412,8 +412,12 @@ deres_rf <- diff_analysis(obj = ps, classgroup = "cap_wild_crate",
                           subclwilc = TRUE,
                           secondalpha = 0.01,
                           lda=3)
+sink("05_taxa_driving_groups/18s/18s_biomarker_discovery_LDA.txt")
 deres
+sink()
+sink("05_taxa_driving_groups/18s/18s_biomarker_discovery_RF.txt")
 deres_rf
+sink()
 
 # Biomarker Abundance (r) & conf. interval of effect size (LDA or MDA) of biomarker. The bigger confident interval shows that the biomarker is more fluctuant, owing to the influence of samples number.
 
@@ -456,7 +460,7 @@ ggsave(filename = "05_taxa_driving_groups/18s/18s_biomarker_abundance_top20_RF.p
 es_p_rf <- ggeffectsize(obj=deres_rf_top20, 
                         lineheight=0.1,
                         linewidth=0.3) + 
-  scale_color_manual(values=c("purple4", "seagreen", "goldenrod", "#CD2C7A")) 
+  scale_color_manual(values=c("purple4", "#CD2C7A", "goldenrod"))  #"seagreen",
 es_p_rf
 ggsave(filename = "05_taxa_driving_groups/18s/18s_biomarker_top20_RF.png",es_p_rf, height=5, width=8)
 
