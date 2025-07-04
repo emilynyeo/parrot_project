@@ -1,9 +1,11 @@
 # Which Taxa drive the differences between groups? 
 
 #### Load libraries ####
-pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2)
+pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
+               MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
+               UpSetR, gridExtra, grid, WGCNA)
+#BiocManager::install(c("GO.db", "impute", "preprocessCore"))
                
-#dir.create("04_beta_diversity")
 #### Load data ####
 # Also converting to matrices with rownames for phyloseq
 load("01_process_and_clean_data/phyloseq16n.rds")
@@ -22,13 +24,13 @@ load("02_split_18_classes/phyloseq18miseq_nohost.rds")
 load("02_split_18_classes/phyloseq18miseq_plants.rds")
 load("02_split_18_classes/phyloseq18miseq_microeuk.rds")
 
-# Merge phyloseq objects 
+# ** Merge phyloseq objects **
 phyloseq16all <- merge_phyloseq(phyloseq16n, phyloseq16ren)
 phyloseq18all <- phyloseq18nano_nohost
 phyloseq18all <- prune_samples(sample_sums(phyloseq18all) >0, phyloseq18all)
 phyloseq18miseq_nohost <- prune_samples(sample_sums(phyloseq18miseq_nohost) >0, phyloseq18miseq_nohost)
 
-# Combine Crate Data into one
+# ** Combine Crate Data into one **
 sample_df <- as.data.frame(sample_data(phyloseq16all))
 
 # Create new variable with recoded values
@@ -48,52 +50,64 @@ levels(sample_data(phyloseq16all)$cap_wild_crate)
 #### ANCOM-BC2 for all 16s nano data ####
 ?ancombc2
 
-set.seed(123)
-p16n_all_anc <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
-                  fix_formula = "Captive.Wild", rand_formula = NULL,
-                  p_adj_method = "holm", pseudo_sens = TRUE,
-                  prv_cut = 0, lib_cut = 1000, s0_perc = 0.05,
-                  group = "Captive.Wild", struc_zero = TRUE, neg_lb = TRUE)
+#set.seed(123)
+# p16n_all_anc <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
+#                   fix_formula = "Captive.Wild", rand_formula = NULL,
+#                   p_adj_method = "holm", pseudo_sens = TRUE,
+#                   prv_cut = 0, lib_cut = 1000, s0_perc = 0.05,
+#                   group = "Captive.Wild", struc_zero = TRUE, neg_lb = TRUE)
 
 p16n_all_anc_1crate <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
                           fix_formula = "cap_wild_crate", rand_formula = NULL,
                           p_adj_method = "holm", pseudo_sens = TRUE,
                           prv_cut = 0, lib_cut = 1000, s0_perc = 0.05,
                           group = "cap_wild_crate", struc_zero = TRUE, neg_lb = TRUE)
-                  
-res <- p16n_all_anc_1crate$res
 
-# Plot 
-plot_ancombc_pq(
-  phyloseq16all,
-  p16n_all_anc,
-  filter_passed = TRUE,
-  filter_diff = TRUE,
-  min_abs_lfc = 0,
-  tax_col = "Genus",
-  tax_label = "Species",
-  add_marginal_vioplot = TRUE,
-  add_label = TRUE,
-  add_hline_cut_lfc = NULL
-)
+# save(p16n_all_anc, 
+#      p16n_all_anc_1crate,
+#      file = "05_taxa_driving_groups/ancom_16sn.RData")
+load("05_taxa_driving_groups/ancom_16sn.RData")       
 
-save(p16n_all_anc, 
-     p16n_all_anc_1crate,
-     file = "05_taxa_driving_groups/ancom_16sn.RData")
+res_df <- p16n_all_anc_1crate$res
+# Reshape: gather LFC and FDR (q-value) columns
+plot_df <- res_df %>%
+  dplyr::select(taxon, starts_with("lfc_"), starts_with("q_"), starts_with("diff_")) %>%
+  pivot_longer(cols = -taxon, names_to = "metric", values_to = "value") %>%
+  separate(metric, into = c("type", "group"), sep = "_(?=cap|\\(Intercept\\))", extra = "merge") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  filter(diff == TRUE, q < 0.05)  # Keep only significant taxa
+
+
+plot_df$group <- str_replace_all(plot_df$group, "cap_wild_crate", "")
+plot_df$taxon <- gsub("_", " ", plot_df$taxon)
+plot_df <- plot_df %>%
+           mutate(group = ifelse(group == "(Intercept)", "Captive", group))
+
+# Plot: barplot of LFCs
+n16_1crate <- ggplot(plot_df, aes(x = reorder(taxon, lfc), y = lfc, fill = group)) +
+  geom_col(position = position_dodge(width = 0.9)) +
+  coord_flip() +
+  labs(title = "Significant Differential Abundance (ANCOMBC2)",
+    x = "Taxon",
+    y = "Log Fold Change",
+    fill = "Group") +
+  scale_fill_manual(
+    values = c("Captive" = "#00AED7",
+      "New crates" = "#FD9347",
+      "Wild, free ranging" = "seagreen",
+      "Wild, seized from traffickers" = "purple4")) +
+  theme_bw(base_size = 14) +  # increases base text size and uses white background
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 14))
+
+ggsave(filename = "05_taxa_driving_groups/16n_ancombc_1crate.png",n16_1crate, height=15, width=18)
 
 # MICROBIOME WORKSHOP
 ### https://yulab-smu.top/MicrobiotaProcessWorkshop/articles/MicrobiotaProcessWorkshop.html
-BiocManager::install(c("GO.db", "impute", "preprocessCore"))
-library(coin)
-library(MicrobiotaProcess)
-library(patchwork)
-library(reshape2) # Flexibly Reshape Data: A Reboot of the Reshape Package.
-library(ggnewscale)
-library(VennDiagram)
-library(UpSetR)
-library(gridExtra)
-library(grid)
-library(WGCNA)
 
 # ALPHA D and READ DEPTH
 set.seed(1024)
@@ -113,8 +127,7 @@ prare1 <- ggrarecurve(obj=rareres, factorNames="cap_wild_crate",
 prare2 <- ggrarecurve(obj=rareres,
                       factorNames="cap_wild_crate",
                       shadow=FALSE,
-                      indexNames=c("Observe", "Chao1", "ACE")
-) +
+                      indexNames=c("Observe", "Chao1", "ACE")) +
   scale_color_manual(values=c("#00AED7", "#FD9347","seagreen","purple4"))+
   coord_cartesian(ylim = c(0, 400)) +
   theme_bw()+
@@ -123,6 +136,7 @@ prare2 <- ggrarecurve(obj=rareres,
         strip.text.x = element_text(face="bold"))
 ggsave(filename = "05_taxa_driving_groups/16s_alpha_reads.png",prare2, height=5, width=8)
 prare1 / prare2
+
 
 # OVERLAPPING TAXA
 
@@ -203,7 +217,24 @@ deres <- diff_analysis(obj = ps, classgroup = "cap_wild_crate",
                        subclwilc = TRUE,
                        secondalpha = 0.01,
                        lda=3)
+
+deres_rf <- diff_analysis(obj = ps, classgroup = "cap_wild_crate",
+                       mlfun = "rf",
+                       filtermod = "pvalue",
+                       firstcomfun = "kruskal_test",
+                       firstalpha = 0.05,
+                       strictmod = TRUE,
+                       secondcomfun = "wilcox_test",
+                       subclmin = 3,
+                       subclwilc = TRUE,
+                       secondalpha = 0.01,
+                       lda=3)
 deres
+deres_rf
+
+# Enriched group:
+result_df <- deres_rf@result
+head(result_df[, c("f", "MDAmean", "cap_wild_crate")])
 
 # Biomarker Abundance (r) & conf. interval of effect size (LDA or MDA) of biomarker. The bigger confident interval shows that the biomarker is more fluctuant, owing to the influence of samples number.
 
