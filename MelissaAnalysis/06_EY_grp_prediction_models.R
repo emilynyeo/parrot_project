@@ -4,7 +4,9 @@
 pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
                MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
                UpSetR, gridExtra, grid, WGCNA, gt, caret, randomForest, pROC, e1071)
-library(e1071)      # For confusionMatrix
+library(calecopal)
+bigsur = c("#E4DECE", "#ECBD95", "#9BB1BB", "#79ACBD", "#346575", "#0B4221")
+
 #BiocManager::install(c("GO.db", "impute", "preprocessCore"))
 
 #### Load data ####
@@ -53,176 +55,214 @@ levels(sample_data(phyloseq16all)$cap_wild_crate)
 phyloseq_no_new_crates <- subset_samples(phyloseq16all, cap_wild_crate != "New crates")
 levels(sample_data(phyloseq_no_new_crates)$cap_wild_crate)
 
-
 ### MANUAL MODEL ### 
-ps <- phyloseq16all
-
-# Transform to relative abundance
-ps_rel <- transform_sample_counts(ps, function(x) x / sum(x))
-otu <- as.data.frame(otu_table(ps_rel))
-meta <- as.data.frame(sample_data(ps_rel))
-
-# Combine OTU and metadata
-otu_t <- as.data.frame(t(otu))
-data <- cbind(otu_t, Group = meta$cap_wild_crate)
-data$Group <- as.factor(data$Group)
-levels(data$Group) <- c("Captive", "Wild_free", "Wild_seized", "New_crates")
-
-#  Create Train/Test Split
-set.seed(123)
-trainIndex <- createDataPartition(data$Group, p = 0.8, list = FALSE)
-trainData <- data[trainIndex, ]
-testData <- data[-trainIndex, ]
-
-# Caret k-fold cross-validation (10-fold) & model training (Random Forest here):
-ctrl <- trainControl(method = "cv", number = 10,
-                     classProbs = TRUE,
-                     summaryFunction = multiClassSummary,
-                     savePredictions = TRUE)
-
-model <- train(Group ~ ., data = trainData,
-               method = "rf",
-               trControl = ctrl,
-               metric = "Accuracy")
-
-# Evaluate Model on Test Set
-pred <- predict(model, newdata = testData)
-confusion <- confusionMatrix(pred, testData$Group)
-print(confusion)
-
-# per-class sensitivity and specificity:
-confusion$byClass[, c("Sensitivity", "Specificity")]
-
-# macro/micro averages:
-mean(confusion$byClass[, "Sensitivity"], na.rm = TRUE)
-mean(confusion$byClass[, "Specificity"], na.rm = TRUE)
-
-cm_df <- as.data.frame(confusion$table)
-colnames(cm_df) <- c("Prediction", "Reference", "Freq")
-
-confusion_plot <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
-  geom_tile() +
-  geom_text(aes(label = Freq), color = "white", size = 5) +
-  scale_fill_gradient(low = "steelblue", high = "red") +
-  labs(title = "Confusion Matrix Heatmap", x = "Actual", y = "Predicted") +
-  theme_minimal()
-
-importance <- varImp(model)$importance
-importance$Feature <- rownames(importance)
-
-importance_plot <- ggplot(importance, aes(x = reorder(Feature, Overall), y = Overall)) +
-  geom_col(fill = "darkgreen") +
-  coord_flip() +
-  labs(title = "Variable Importance", x = "Feature", y = "Importance") +
-  theme_minimal()
+ps <- phyloseq_no_new_crates
 
 #### MANUAL MICROBIOME PREDICTION MODEL ####
-
-# function for easy tuning 
-
 run_microbiome_model <- function(physeq_obj,
-                                 group_var,
-                                 method = "rf",
-                                 p = 0.8,
-                                 cv_folds = 10,
-                                 seed = 123,
-                                 plot_results = TRUE) {
-  
-  set.seed(seed)
-  # Transform to relative abundance
-  ps_rel <- transform_sample_counts(physeq_obj, function(x) x / sum(x))
-  # Extract OTU and metadata
-  otu <- as.data.frame(otu_table(ps_rel))
-  meta <- as.data.frame(sample_data(ps_rel))
-  
-  # Ensure OTUs are samples in rows
-  if (!taxa_are_rows(ps_rel)) {
-    otu_t <- as.data.frame(otu)
-  } else {
-    otu_t <- as.data.frame(t(otu))
-  }
-  
-  # Combine with metadata
-  data <- cbind(otu_t, Group = meta[[group_var]])
-  data$Group <- as.factor(data$Group)
-  data$Group <- as.factor(make.names(data$Group))
-  
-  # Create Train/Test Split
-  trainIndex <- createDataPartition(data$Group, p = p, list = FALSE)
-  trainData <- data[trainIndex, ]
-  testData <- data[-trainIndex, ]
-  
-  # Train Control
-  ctrl <- trainControl(method = "cv",
-                       number = cv_folds,
-                       classProbs = TRUE,
-                       summaryFunction = multiClassSummary,
-                       savePredictions = TRUE)
-  
-  # Model training
-  model <- train(Group ~ ., data = trainData,
-                 method = method,
-                 trControl = ctrl,
-                 metric = "Accuracy")
-  
-  # Test set prediction
-  pred <- predict(model, newdata = testData)
-  
-  # Confusion matrix
-  confusion <- confusionMatrix(pred, testData$Group)
-  
-  # Sensitivity and specificity (per class and averages)
-  sens_spec <- confusion$byClass[, c("Sensitivity", "Specificity")]
-  mean_sens <- mean(confusion$byClass[, "Sensitivity"], na.rm = TRUE)
-  mean_spec <- mean(confusion$byClass[, "Specificity"], na.rm = TRUE)
-  
-  confusion_plot <- NULL
-  importance_plot <- NULL
-  
-  if (plot_results) {
-    # Confusion Matrix Heatmap
-    cm_df <- as.data.frame(confusion$table)
-    colnames(cm_df) <- c("Prediction", "Reference", "Freq")
+                                   group_var,
+                                   method = "rf",
+                                   p = 0.75,
+                                   cv_folds = 10,
+                                   seed = 123,
+                                   plot_results = TRUE) {
+    library(phyloseq)
+    library(caret)
+    library(ggplot2)
+    library(dplyr)
     
-    confusion_plot <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
-      geom_tile() +
-      geom_text(aes(label = Freq), color = "white", size = 5) +
-      scale_fill_gradient(low = "steelblue", high = "red") +
-      labs(title = "Confusion Matrix Heatmap", x = "Actual", y = "Predicted") +
-      theme_minimal()
+    set.seed(seed)
     
-    # Variable Importance Plot (if supported)
-    if ("varImp" %in% methods(class = class(model))) {
-      importance <- varImp(model)$importance
-      importance$Feature <- rownames(importance)
-      importance <- importance %>% filter(Overall > 0) %>%
-                    slice_max(order_by = Overall, n = 100)
-      
-      importance_plot <- ggplot(importance, aes(x = reorder(Feature, Overall), y = Overall)) +
-        geom_col(fill = "darkgreen") +
-        coord_flip() +
-        labs(title = "Variable Importance", x = "Feature", y = "Importance") +
-        theme_minimal()
+    # Transform to relative abundance
+    ps_rel <- transform_sample_counts(physeq_obj, function(x) x / sum(x))
+    
+    # Extract OTU and metadata
+    otu <- as.data.frame(otu_table(ps_rel))
+    meta <- as.data.frame(sample_data(ps_rel))
+    
+    # Ensure OTUs are samples in rows
+    if (!taxa_are_rows(ps_rel)) {
+      otu_t <- as.data.frame(otu)
+    } else {
+      otu_t <- as.data.frame(t(otu))
     }
+    
+    # Combine OTU data and group variable
+    data <- cbind(otu_t, Group = meta[[group_var]])
+    data$Group <- as.factor(make.names(data$Group))  # ensure valid R names
+    
+    # Train/test split
+    trainIndex <- createDataPartition(data$Group, p = p, list = FALSE)
+    trainData <- data[trainIndex, ]
+    testData  <- data[-trainIndex, ]
+    
+    # Cross-validation control
+    ctrl <- trainControl(method = "cv",
+                         number = cv_folds,
+                         classProbs = TRUE,
+                         summaryFunction = multiClassSummary,
+                         savePredictions = TRUE)
+    
+    # Train model
+    model <- train(Group ~ ., data = trainData,
+                   method = method,
+                   trControl = ctrl,
+                   metric = "Accuracy")
+    
+    # Predict on test data
+    pred <- predict(model, newdata = testData)
+    
+    # Confusion matrix
+    confusion <- confusionMatrix(pred, as.factor(testData$Group))
+    
+    # Sensitivity and specificity
+    sens_spec  <- confusion$byClass[, c("Sensitivity", "Specificity")]
+    mean_sens  <- mean(confusion$byClass[, "Sensitivity"], na.rm = TRUE)
+    mean_spec  <- mean(confusion$byClass[, "Specificity"], na.rm = TRUE)
+    
+    # Initialize plots
+    confusion_plot  <- NULL
+    importance_plot <- NULL
+    
+    if (plot_results) {
+      ## Confusion matrix heatmap
+      cm_df <- as.data.frame(confusion$table)
+      colnames(cm_df) <- c("Prediction", "Reference", "Freq")
+      
+      confusion_plot <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
+        geom_tile() +
+        geom_text(aes(label = Freq), color = "white", size = 5) +
+        scale_fill_gradient(low = "steelblue", high = "#FF4D4D") +
+        labs(title = "Confusion Matrix Heatmap", x = "Actual", y = "Predicted") +
+        theme_minimal()
+      
+      ## Variable importance plot
+      importance_result <- try(varImp(model), silent = TRUE)
+      
+      if (!inherits(importance_result, "try-error") && "importance" %in% names(importance_result)) {
+        importance <- importance_result$importance
+        
+        if ("Overall" %in% colnames(importance)) {
+          importance$Feature <- rownames(importance)
+          importance <- importance %>%
+            filter(Overall > 0) %>%
+            slice_max(order_by = Overall, n = 60)
+          
+          importance_plot <- ggplot(importance, aes(x = reorder(Feature, Overall), y = Overall)) +
+            geom_col(fill = "darkgreen") +
+            coord_flip() +
+            labs(title = "Top 60 Variable Importance",
+                 x = "Feature", y = "Importance") +
+            theme_minimal()
+        }
+      }
+    }
+    
+    # Return everything as a named list
+    return(list(
+      model                = model,
+      predictions          = pred,
+      confusion_matrix     = confusion,
+      sensitivity_specificity = sens_spec,
+      mean_sensitivity     = mean_sens,
+      mean_specificity     = mean_spec,
+      confusion_plot       = confusion_plot,
+      importance_plot      = importance_plot
+    ))
   }
   
-  # Return results and plots
-  list(
-    model = model,
-    predictions = pred,
-    confusion_matrix = confusion,
-    sensitivity_specificity = sens_spec,
-    mean_sensitivity = mean_sens,
-    mean_specificity = mean_spec,
-    confusion_plot = confusion_plot,
-    importance_plot = importance_plot
-  )
-}
-
+# Options for model inputs : 
+model_options <- modelLookup() %>% filter(forClass == TRUE)
+  
 results_rf <- run_microbiome_model(
-  physeq_obj = phyloseq16all,
+  physeq_obj = ps,
   group_var = "cap_wild_crate",
   method = "rf",
-  p = 0.8,
-  cv_folds = 10,
+  p = 0.75, seed = 241, cv_folds = 10,
   plot_results = TRUE)
+
+
+results_pcaNNet <- run_microbiome_model(
+  physeq_obj = ps,
+  group_var = "cap_wild_crate",
+  method = "pcaNNet",
+  p = 0.75, seed = 241, cv_folds = 10,
+  plot_results = TRUE)
+
+results_xgbTree <- run_microbiome_model(
+  physeq_obj = ps,
+  group_var = "cap_wild_crate",
+  method = "xgbTree",
+  p = 0.75, seed = 241, cv_folds = 10,
+  plot_results = TRUE)
+
+save(results_rf, 
+     results_pcaNNet,
+     results_xgbTree,
+     file = "06_grp_prediction_models/rf_pcannet_xgbtre_no_crate.RData")
+
+ggsave(filename = "06_grp_prediction_models/rf_confusion_plot_no_crates.png",
+       plot = results_rf$confusion_plot, width = 8, height = 6, dpi = 300)
+
+ggsave(filename = "06_grp_prediction_models/rf_importance_plot_no_crates.png",
+       plot = results_rf$importance_plot, width = 8, height = 6, dpi = 300)
+
+# Save pcaNNet plots
+ggsave(filename = "06_grp_prediction_models/pcannet_confusion_plot_no_crates.png",
+       plot = results_pcaNNet$confusion_plot, width = 8, height = 6, dpi = 300)
+
+ggsave(filename = "06_grp_prediction_models/pcannet_importance_plot_no_crates.png",
+       plot = results_pcaNNet$importance_plot, width = 8, height = 6, dpi = 300)
+
+# Save xgbTree plots
+ggsave(filename = "06_grp_prediction_models/xgbtree_confusion_plot_no_crates.png",
+       plot = results_xgbTree$confusion_plot, width = 8, height = 6, dpi = 300)
+
+ggsave(filename =  "06_grp_prediction_models/xgbtree_importance_plot_no_crates.png",
+       plot = results_xgbTree$importance_plot, width = 8, height = 6, dpi = 300)
+  
+### Plot and compare models 
+
+# Step 1: Extract and format the metrics from each model
+extract_metrics <- function(model_result, model_name) {
+  metrics <- model_result$confusion_matrix$byClass[, c("Sensitivity", "Specificity", "Balanced Accuracy")]
+  metrics_df <- as.data.frame(metrics)
+  metrics_df$Class <- rownames(metrics_df)
+  metrics_df$Model <- model_name
+  return(metrics_df)
+}
+
+# Extract metrics from all models
+rf_df       <- extract_metrics(results_rf, "Random Forest")
+pcaNNet_df  <- extract_metrics(results_pcaNNet, "pcaNNet")
+xgbTree_df  <- extract_metrics(results_xgbTree, "xgbTree")
+
+# Combine all into df and make long
+all_metrics <- bind_rows(rf_df, pcaNNet_df, xgbTree_df)
+metrics_long <- all_metrics %>%
+  pivot_longer(cols = c(Sensitivity, Specificity, `Balanced Accuracy`),
+               names_to = "Metric", values_to = "Value")
+
+# Clean up class labels
+metrics_long$Class <- gsub("\\.\\.", " ", gsub("\\.", " ", metrics_long$Class))
+
+mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Model)) +
+  geom_col(position = position_dodge()) +
+  facet_wrap(~Metric, scales = "free_y") +
+  theme_minimal(base_size = 14, base_family = "") +  # Increase base font size
+  labs(title = "Model Performances by Parrot Group",
+    y = "Metric Value", x = "Group") +
+  scale_fill_manual(values = cal_palette("superbloom3")) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),  # White background
+    panel.background = element_rect(fill = "white", color = NA), 
+    strip.background = element_rect(fill = "white"),
+    strip.text = element_text(face = "bold", size = 16),      
+    axis.text = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(face = "bold", size = 16),
+    legend.title = element_text(face = "bold", size = 14),
+    legend.text = element_text(face = "bold", size = 12),
+    plot.title = element_text(face = "bold", size = 18, hjust = 0.5))
+
+ggsave(filename = "06_grp_prediction_models/compare_models_no_crates.png",mod_results_compare, height=15, width=18)
