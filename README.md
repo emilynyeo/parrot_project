@@ -1,8 +1,8 @@
-# 🦜 Parrot Project
+# 🦜 Parrot Project 
 
 Welcome to the **Parrot Project** repository! This project contains scripts and data for the analysis of parrot microbiome samples, focusing on data processing, diversity analysis, and predictive modeling.
 
-We are trying to see if we can identify parrots who have been smuggled from the wild into captivity. 
+We are trying to see if we can identify parrots who have been smuggled from the wild into captivity 🏴‍☠️
 
 ---
 
@@ -14,7 +14,7 @@ The repository is organized into folders and scripts corresponding to each stage
 
 ---
 
-## 📝 Scripts Overview
+## 📝 Scripts Overview (all in the MelissaAnalysis folder)
 
 | Script | Description |
 |--------|-------------|
@@ -30,7 +30,7 @@ The repository is organized into folders and scripts corresponding to each stage
 ## 👩‍🔬 Got questions? 
 
 - **Scripts 1–4**: Primarily written by Mel
-- **Scripts 5–6 and onwards**: Authored by Emily, further exploring the data with new analyses
+- **Scripts 5–6 and onwards**: Coded by Emily, further exploring the data with new analyses
 
 ---
 
