@@ -314,9 +314,9 @@ gg_readdepth_div_16 <- alpha_16 %>%
 gg_readdepth_div_16
 #ggsave(filename="03_alpha_diversity/gg_readdepth_div_16.png", gg_readdepth_div_16, height=8, width=5)
 
-summary(lm(value ~ ReadDepth18n, data=alpha_18 %>%
+summary(lm(value ~ ReadDepth18n, data=alpha_18_nohost %>%
              filter(Type=="All eukaryotes") %>% filter(variable == "Chao1")))
-summary(lm(value ~ ReadDepth18n, data=alpha_18 %>%
+summary(lm(value ~ ReadDepth18n, data=alpha_18_nohost %>%
              filter(Type=="All eukaryotes") %>% filter(variable == "Shannon")))
 summary(lm(value ~ ReadDepth18n, data=alpha_18 %>%
              filter(Type=="All eukaryotes") %>% filter(variable == "InvSimpson")))

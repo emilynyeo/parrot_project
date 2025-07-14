@@ -79,26 +79,25 @@ reads_18 %>% select(ends_with(".0")) %>% colSums()
 # Yes; remove these.
 
 # 16S
-colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16))
-r116 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() 
-r216 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() 
+colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16)) # 703 cols
+# dim(reads_16)
+# 11628   703
+r116 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 343
+r216 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 344
 
 # Run 1 are miseq ones. Run 2 is Nanopore
-otu16m_df <- reads_16 %>%
-  select(ESVId, starts_with("S0") & ends_with(".1")) 
-
-otu16n_df <- reads_16 %>%
-  select(ESVId, starts_with("S0") & ends_with(".2"))
+otu16m_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".1")) 
+otu16n_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".2"))
 
 # Remove empty rows
-otu16m_df <- otu16m_df[rowSums(otu16m_df[,-1])>0,] # miseq
-otu16n_df <- otu16n_df[rowSums(otu16n_df[,-1])>0,] # nanopor 
+otu16m_df <- otu16m_df[rowSums(otu16m_df[,-1])>0,] # miseq (3638 removed)
+otu16n_df <- otu16n_df[rowSums(otu16n_df[,-1])>0,] # nanopor (2474 removed)
 
 # 18S
-colnames(reads_18) <- gsub("^s0","S0", colnames(reads_18))
-r118 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() 
-r218 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() 
-r318 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".3")) %>% colnames() 
+colnames(reads_18) <- gsub("^s0","S0", colnames(reads_18)) # 713 cols
+r118 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 344 length 
+r218 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 340 length
+r318 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".3")) %>% colnames() # 12 length
 r318_woSuffix <- gsub(".3$","",r318)
 
 # JOE SAYS: "On AWS the new Nanopore data is all rep 2, with the exception of 12 samples that already had 2 reps for 18S_616, which I made rep 3."
@@ -112,7 +111,11 @@ otu18n_df <- reads_18 %>%
 
 # Remove empty rows
 otu18m_df <- otu18m_df[rowSums(otu18m_df[,-1])>0,] # 18s miseq
+# dim(otu18m_df)
+# 11868   345
 otu18n_df <- otu18n_df[rowSums(otu18n_df[,-1])>0,] # 18s nanopore 
+# dim(otu18n_df)
+# 11868   341
 
 # Renee's 16
 colnames(reads_16ren) <- gsub("^s0","S0", colnames(reads_16ren))
@@ -133,8 +136,10 @@ colnames(otu18m_df) <- gsub("[.]2", "", gsub("[.]1","", colnames(otu18m_df)))
 
 otu16m_mat <- as.matrix(otu16m_df[,-1])
 rownames(otu16m_mat) <- otu16m_df[,1]
+# dim(otu16m_mat): 7990  343
 otu18m_mat <- as.matrix(otu18m_df[,-1])
 rownames(otu18m_mat) <- otu18m_df[,1]
+# dim(otu18m_mat): 11868   344
 
 # NANOPORE RUN Original
 colnames(otu16n_df) <- gsub("[.]2","", colnames(otu16n_df))
@@ -142,8 +147,11 @@ colnames(otu18n_df) <- gsub("[.]2", "", gsub("[.]3","", colnames(otu18n_df)))
 
 otu16n_mat <- as.matrix(otu16n_df[,-1])
 rownames(otu16n_mat) <- otu16n_df[,1]
+# dim(otu16n_mat): 9154  344
+
 otu18n_mat <- as.matrix(otu18n_df[,-1])
 rownames(otu18n_mat) <- otu18n_df[,1]
+# dim(otu18n_mat): 11868   340
 
 # Renee's samples
 colnames(otu16ren_df) <- gsub("[.]1","", colnames(otu16ren_df))
@@ -151,9 +159,10 @@ colnames(otu18ren_df) <- gsub("[.]1", "",colnames(otu18ren_df))
 
 otu16ren_mat <- as.matrix(otu16ren_df[,-1])
 rownames(otu16ren_mat) <- otu16ren_df[,1]
+# dim(otu16ren_mat): 684  23
 otu18ren_mat <- as.matrix(otu18ren_df[,-1])
 rownames(otu18ren_mat) <- otu18ren_df[,1]
-
+# dim(otu18ren_mat): 200  23
 
 #### Cleaning up any metadata ####
 
@@ -376,7 +385,7 @@ gg_16n_bactornot <- otu16n_mat_bactornot_RA %>% as.data.frame() %>%
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 
 gg_16n_bactornot
-ggsave(gg_16n_bactornot, filename="01_process_and_clean_data/gg_16n_bactornot.png", height=6, width=10)
+#ggsave(gg_16n_bactornot, filename="01_process_and_clean_data/gg_16n_bactornot.png", height=6, width=10)
 
 # format for plotting miseq original
 otu16m_mat_bactornot <- otu16m_bactornot %*% otu16m_mat[match(colnames(otu16m_bactornot),rownames(otu16m_mat)),]
@@ -390,7 +399,7 @@ gg_16m_bactornot <- otu16m_mat_bactornot_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_16m_bactornot
-ggsave(gg_16m_bactornot, filename="01_process_and_clean_data/gg_16m_bactornot.png", height=6, width=10)
+#ggsave(gg_16m_bactornot, filename="01_process_and_clean_data/gg_16m_bactornot.png", height=6, width=10)
 
 # format for plotting Rene
 otu16ren_mat_bactornot <- otu16ren_bactornot %*% otu16ren_mat[match(colnames(otu16ren_bactornot),rownames(otu16ren_mat)),]
@@ -404,7 +413,7 @@ gg_16ren_bactornot <- otu16ren_mat_bactornot_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_16ren_bactornot
-ggsave(gg_16ren_bactornot, filename="01_process_and_clean_data/gg_16ren_bactornot.png", height=6, width=10)
+#ggsave(gg_16ren_bactornot, filename="01_process_and_clean_data/gg_16ren_bactornot.png", height=6, width=10)
 
 ### 18S
 # Processes tax data to classify each ESV as Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast, and reshapes the data into a binary presence/absence matrix, where each row represents a taxonomic type and each column an ESV
@@ -457,7 +466,7 @@ gg_18m_eukornot <- otu18m_mat_eukornot_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18m_eukornot
-ggsave(gg_18m_eukornot, filename="01_process_and_clean_data/gg_18m_eukornot.png", height=6, width=10)
+#ggsave(gg_18m_eukornot, filename="01_process_and_clean_data/gg_18m_eukornot.png", height=6, width=10)
 
 # plot 18s nano original
 otu18n_mat_eukornot <- otu18n_eukornot %*% otu18n_mat[match(colnames(otu18n_eukornot),rownames(otu18n_mat)),]
@@ -471,7 +480,7 @@ gg_18n_eukornot <- otu18n_mat_eukornot_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18n_eukornot
-ggsave(gg_18n_eukornot, filename="01_process_and_clean_data/gg_18n_eukornot.png", height=6, width=10)
+#ggsave(gg_18n_eukornot, filename="01_process_and_clean_data/gg_18n_eukornot.png", height=6, width=10)
 
 # plot 18s Rene
 otu18ren_mat_eukornot <- otu18ren_eukornot %*% otu18ren_mat[match(colnames(otu18ren_eukornot),rownames(otu18ren_mat)),]
@@ -485,7 +494,7 @@ gg_18ren_eukornot <- otu18ren_mat_eukornot_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18ren_eukornot
-ggsave(gg_18ren_eukornot, filename="01_process_and_clean_data/gg_18ren_eukornot.png", height=6, width=10)
+#ggsave(gg_18ren_eukornot, filename="01_process_and_clean_data/gg_18ren_eukornot.png", height=6, width=10)
 
 
 ### 18S-- more detailed
@@ -515,7 +524,7 @@ gg_18m_eukdetailed <- otu18m_mat_eukdetailed_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18m_eukdetailed
-ggsave(gg_18m_eukdetailed, filename="01_process_and_clean_data/gg_18m_eukdetailed.png", height=6, width=10)
+#ggsave(gg_18m_eukdetailed, filename="01_process_and_clean_data/gg_18m_eukdetailed.png", height=6, width=10)
 
 # Nanopore
 otu18n_eukdetailed <- tax18n %>% 
@@ -541,7 +550,7 @@ gg_18n_eukdetailed <- otu18n_mat_eukdetailed_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18n_eukdetailed
-ggsave(gg_18n_eukdetailed, filename="01_process_and_clean_data/gg_18n_eukdetailed.png", height=6, width=10)
+#ggsave(gg_18n_eukdetailed, filename="01_process_and_clean_data/gg_18n_eukdetailed.png", height=6, width=10)
 
 # Renee
 otu18ren_eukdetailed <- tax18ren %>% 
@@ -567,7 +576,7 @@ gg_18ren_eukdetailed <- otu18ren_mat_eukdetailed_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18ren_eukdetailed
-ggsave(gg_18ren_eukdetailed, filename="01_process_and_clean_data/gg_18ren_eukdetailed.png", height=6, width=10)
+#ggsave(gg_18ren_eukdetailed, filename="01_process_and_clean_data/gg_18ren_eukdetailed.png", height=6, width=10)
 
 
 ### 18S-- more detailed 2
@@ -599,7 +608,7 @@ gg_18m_eukdetailed2 <- otu18m_mat_eukdetailed2_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18m_eukdetailed2
-ggsave(gg_18m_eukdetailed2, filename="01_process_and_clean_data/gg_18m_eukdetailed2.png", height=6, width=10)
+#ggsave(gg_18m_eukdetailed2, filename="01_process_and_clean_data/gg_18m_eukdetailed2.png", height=6, width=10)
 
 # Nanopore
 otu18n_eukdetailed2 <- tax18n %>% 
@@ -626,7 +635,7 @@ gg_18n_eukdetailed2 <- otu18n_mat_eukdetailed2_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18n_eukdetailed2
-ggsave(gg_18n_eukdetailed2, filename="01_process_and_clean_data/gg_18n_eukdetailed2.png", height=6, width=10)
+#ggsave(gg_18n_eukdetailed2, filename="01_process_and_clean_data/gg_18n_eukdetailed2.png", height=6, width=10)
 
 # Renee
 otu18ren_eukdetailed2 <- tax18ren %>% 
@@ -653,7 +662,7 @@ gg_18ren_eukdetailed2 <- otu18ren_mat_eukdetailed2_RA %>% as.data.frame() %>%
   facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
   theme(axis.text.x = element_blank())+ylab("Relative Abundance")
 gg_18ren_eukdetailed2
-ggsave(gg_18ren_eukdetailed2, filename="01_process_and_clean_data/gg_18ren_eukdetailed2.png", height=6, width=10)
+#ggsave(gg_18ren_eukdetailed2, filename="01_process_and_clean_data/gg_18ren_eukdetailed2.png", height=6, width=10)
 
 #### Remove chloroplasts and mitochondria for 16S ####
 # Chloroplasts are Order level; Mitochondria are family level
@@ -787,19 +796,29 @@ cutoff18S <- 100
 # 16S
 for ( o in c("m","n","ren")) {
   otumattemp <- get(paste0("otu16",o,"_mat_filt2"))
+  cat("\n-----", o, "-----\n")
+  cat("Initial number of samples (columns):", ncol(otumattemp), "\n")
+  cat("Initial number of ESVs (rows):", nrow(otumattemp), "\n")
   cutoff <- ifelse(o %in% c("otu16m"), cutoff16Smiseq, cutoff16Snano)
+  
   # Filter out samples
   toKeepSamples <- colnames(otumattemp)[which(colSums(otumattemp)>=cutoff)]
   otu_mat_final_temp <- otumattemp[, toKeepSamples]
+  cat("Number of samples retained:", length(toKeepSamples), "\n")
+  cat("Number of samples removed:", ncol(otumattemp) - length(toKeepSamples), "\n")
+  cat("Number of ESVs retained after sample filtering:", nrow(otu_mat_final_temp), "\n")
   
   # Filter out metadata to match OTU table
   meta_temp <- meta_adj %>% filter(SampleId %in% toKeepSamples)
+  cat("Metadata entries retained:", nrow(meta_temp), "\n")
   
   # Get list of ESVs to keep
   listESV_temp <- rownames(otu_mat_final_temp)
   esv_filt_temp <- get(paste0("esv_16",o,"_filt"))
+  cat("Initial taxonomy entries (ESV):", nrow(esv_filt_temp), "\n")
   esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
-  
+  cat("Retained taxonomy entries (ESV):", nrow(esv_final_temp), "\n")
+  cat("Taxonomy entries removed:", nrow(esv_filt_temp) - nrow(esv_final_temp), "\n")
   # Set up phyloseq objects
   meta_phyloseq_temp <- meta_temp %>%
     column_to_rownames("SampleId") 
@@ -816,7 +835,7 @@ for ( o in c("m","n","ren")) {
   seq_temp <- reads_16 %>%
     filter(ESVId %in% rownames(otu_mat_final_temp)) %>%
     select(ESVId, sequence)
-  
+  cat("Number of sequences retained:", nrow(seq_temp), "\n")
   #### Save items ####
   #write_csv(meta_temp, paste0("01_process_and_clean_data/meta16",o,".csv"))
   
@@ -841,6 +860,71 @@ for ( o in c("m","n","ren")) {
   #save(list=paste0("seq16",o), file = paste0("01_process_and_clean_data/seq16",o,".rds"))
   
 }
+
+# for ( o in c("m","n","ren", "m_nohost","n_nohost","ren_nohost")) {
+#   
+#   cat("\n### Processing 18S:", o, "###\n")
+#   
+#   # Load OTU matrix
+#   otumattemp <- get(paste0("otu18",o,"_mat_filt2"))
+#   cat("Initial number of samples (columns):", ncol(otumattemp), "\n")
+#   cat("Initial number of ESVs (rows):", nrow(otumattemp), "\n")
+#   
+#   # Set cutoff
+#   cutoff <- cutoff18S
+#   
+#   # Filter samples
+#   toKeepSamples <- colnames(otumattemp)[which(colSums(otumattemp) >= cutoff)]
+#   cat("Number of samples retained:", length(toKeepSamples), "\n")
+#   cat("Number of samples removed:", ncol(otumattemp) - length(toKeepSamples), "\n")
+#   
+#   # Subset OTU table
+#   otu_mat_final_temp <- otumattemp[, toKeepSamples]
+#   cat("Number of ESVs retained after sample filtering:", nrow(otu_mat_final_temp), "\n")
+#   cat("Number of ESVs removed:", nrow(otumattemp) - nrow(otu_mat_final_temp), "\n")
+#   
+#   # Filter metadata
+#   meta_temp <- meta_adj %>% filter(SampleId %in% toKeepSamples)
+#   cat("Metadata entries retained:", nrow(meta_temp), "\n")
+#   
+#   # Get list of ESVs to keep
+#   listESV_temp <- rownames(otu_mat_final_temp)
+#   esv_filt_temp <- get(paste0("esv_18",o,"_filt"))
+#   cat("Initial taxonomy entries (ESVs):", nrow(esv_filt_temp), "\n")
+#   
+#   esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
+#   cat("Taxonomy entries retained:", nrow(esv_final_temp), "\n")
+#   cat("Taxonomy entries removed:", nrow(esv_filt_temp) - nrow(esv_final_temp), "\n")
+#   
+#   # Set up phyloseq objects
+#   meta_phyloseq_temp <- meta_temp %>% column_to_rownames("SampleId")
+#   
+#   esv_phyloseq_temp <- esv_final_temp %>%
+#     mutate(Species = ScientificName) %>%
+#     select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
+#     column_to_rownames(var = "ESVId") %>% as.matrix()
+#   
+#   # Make phyloseq object
+#   phyloseq_temp <- phyloseq(
+#     otu_table(otu_mat_final_temp, taxa_are_rows = TRUE),
+#     tax_table(esv_phyloseq_temp),
+#     sample_data(meta_phyloseq_temp)
+#   )
+#   
+#   #### Get sequences ####
+#   seq_temp <- reads_18 %>%
+#     filter(ESVId %in% rownames(otu_mat_final_temp)) %>%
+#     select(ESVId, sequence)
+#   cat("Number of sequences retained:", nrow(seq_temp), "\n")
+#   
+#   #### Save items (assign only) ####
+#   assign(paste0("meta18", o), value = meta_temp)
+#   assign(paste0("otu18", o), value = otu_mat_final_temp)
+#   assign(paste0("esv18", o), value = esv_final_temp)
+#   assign(paste0("phyloseq18", o), value = phyloseq_temp)
+#   assign(paste0("seq18", o), value = seq_temp)
+# }
+
 
 # 18S
 # "otu18m","otu18n","otu18ren","otu18m_nohost","otu18n_nohost","otu18ren_nohost"
