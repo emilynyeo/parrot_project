@@ -59,6 +59,9 @@ levels(sample_data(phyloseq_no_new_crates)$cap_wild_crate)
 ps <- phyloseq_no_new_crates
 
 #### MANUAL MICROBIOME PREDICTION MODEL ####
+
+# largely based on this: https://microbiome.netlify.app/classification-using-microbiome.html
+
 run_microbiome_model <- function(physeq_obj,
                                    group_var,
                                    method = "rf",
@@ -266,3 +269,39 @@ mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Mod
     plot.title = element_text(face = "bold", size = 18, hjust = 0.5))
 
 ggsave(filename = "06_grp_prediction_models/compare_models_no_crates.png",mod_results_compare, height=15, width=18)
+
+
+### Testing out network embeddings 
+
+data(enterotype)
+enterotype = subset_samples(ps, !is.na(ps))
+
+plot_net(enterotype, maxdist = 0.4, point_label = "cap_wild_crate")
+plot_net(enterotype, maxdist = 0.3, color = "cap_wild_crate", shape="Country")
+ig <- make_network(enterotype, max.dist=0.7)
+plot_network(ig, enterotype, color="cap_wild_crate", 
+             shape="Country", line_weight=0.4, label=NULL)
+
+ig <- make_network(enterotype, dist.fun="bray", max.dist=0.7)
+plot_network(ig, enterotype, color="Site.name", 
+             shape="cap_wild_crate", line_weight=0.5, label=NULL)
+
+# Trying another
+
+library(rSETSe)
+
+g <- generate_peels_network(type = "E") %>%
+     prepare_edges(k = 500, distance = 1) %>%
+     prepare_categorical_force(., node_names = "name", force_var = "class") 
+
+#Embedds using the bi-connected auto-parametrization algorithm.
+#This method is strongly reccomended, it tends to be much faster and almost always converges
+embeddings <- setse_bicomp(g,
+                           force = "class_A",
+                           tol = sum(abs(vertex_attr(g, "class_A")))/1000,
+                           hyper_tol = 0.1,
+                           hyper_iters = 3000,
+                           verbose = T)
+
+
+

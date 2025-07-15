@@ -10,7 +10,7 @@ library(tidyverse)
 #dir.create("04_beta_diversity")
 #### Load data ####
 # Also converting to matrices with rownames for phyloseq
-
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 load("01_process_and_clean_data/phyloseq16n.rds")
 load("01_process_and_clean_data/phyloseq16ren.rds")
 
@@ -331,3 +331,68 @@ adonis2(dist16_bc_transformed_captiveonly ~ Site.name, data=data.frame(sample_da
 adonis2(dist16_bc_transformed_captiveonly ~ Tube.type, data=data.frame(sample_data(phyloseq16_captiveonly)))
 adonis2(dist16_bc_transformed_captiveonly ~ rand, data=data.frame(sample_data(phyloseq16_captiveonly)) %>% mutate(rand = sample(c("yes","no"), size =  160, replace = TRUE)))
 
+
+# Emily's summary of read depth 
+
+# Get read depth per sample
+nano_depths <- data.frame(Sample = sample_names(phyloseq18nano_nohost),
+                          Reads = sample_sums(phyloseq18nano_nohost),
+                          Method = "Nanopore")
+
+miseq_depths <- data.frame(Sample = sample_names(phyloseq18miseq_nohost),
+                           Reads = sample_sums(phyloseq18miseq_nohost),
+                           Method = "MiSeq")
+
+# Combine
+depth_df <- rbind(nano_depths, miseq_depths)
+
+# Summary stats
+depth_summary <- depth_df %>%
+  group_by(Method) %>%
+  summarise(mean_reads = mean(Reads),
+            median_reads = median(Reads),
+            min_reads = min(Reads),
+            max_reads = max(Reads),
+            sd_reads = sd(Reads))
+
+print(depth_summary)
+
+# Plot read depth
+ggplot(depth_df, aes(x = Method, y = Reads, fill = Method)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, alpha = 0.4) +
+  labs(title = "Read Depth Comparison (18S)",
+       y = "Total Reads per Sample",
+       x = "Sequencing Method") +
+  theme_minimal()
+
+# Emily's PCOa between Miseq and Nano
+
+# Label methods in sample_data
+sample_data(phyloseq18nano_nohost)$SeqMethod <- "Nanopore"
+sample_data(phyloseq18miseq_nohost)$SeqMethod <- "MiSeq"
+
+# Combine datasets
+phyloseq18_combined <- merge_phyloseq(phyloseq18nano_nohost, phyloseq18miseq_nohost)
+
+# Optional: Remove zero-read samples again
+phyloseq18_combined <- prune_samples(sample_sums(phyloseq18_combined) > 0, phyloseq18_combined)
+
+# Bray-Curtis distance
+bray_dist <- phyloseq::distance(phyloseq18_combined, method = "bray")
+
+# PCoA ordination
+pcoa <- ordinate(phyloseq18_combined, method = "PCoA", distance = bray_dist)
+
+# Plot
+ggplot_pcoa <- plot_ordination(phyloseq18_combined, pcoa, type = "samples", color = "SeqMethod") +
+  scale_color_manual(values = c(MiSeq = "dodgerblue3", Nanopore = "firebrick3")) +
+  labs(title = "18S Beta Diversity by Sequencing Method (Bray-Curtis)",
+       subtitle = paste0("PCoA"),
+       color = "Sequencing Method") +
+  theme_minimal()
+
+ggplot_pcoa
+
+metadata_combined <- data.frame(sample_data(phyloseq18_combined))
+adonis2(bray_dist ~ SeqMethod, data = metadata_combined)
