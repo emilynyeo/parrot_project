@@ -7,7 +7,8 @@ library(indicspecies)
 library(tidyverse)
 library(phyloseq)
 library(lubridate)
-
+library(ggplot2)
+library(gridExtra)
 
 # dir.create("01_process_and_clean_data")
 if (!dir.exists("01_process_and_clean_data")) {
@@ -73,34 +74,23 @@ meta_adj <- meta %>% select(SampleId, everything())
 # Suffixes for 16S are either 0, 1, or 2. 
 # Suffixes for 18S are either 0, 1, 2, or 3
 
-# Are set 0's sums 0?
+# Are set 0's sums 0? ~  Yes; remove these.
 reads_16 %>% select(ends_with(".0")) %>% colSums()
 reads_18 %>% select(ends_with(".0")) %>% colSums()
-# Yes; remove these.
 
-# 16S
-colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16)) # 703 cols
-# dim(reads_16)
-# 11628   703
-r116 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 343
-r216 <- reads_16 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 344
+colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16)) # 703 cols, 11628 rows 
 
-# Run 1 are miseq ones. Run 2 is Nanopore
-otu16m_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".1")) 
-otu16n_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".2"))
+# Split nano and miseq and renee
+# JOE: "AWS new Nanopore data is all rep 2, except 12 samples that already had 2 reps for 18S_616, which I made rep 3."
+otu16m_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".1")) # Run 1 are miseq
+otu16n_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".2")) # Run 2 is Nano
 
-# Remove empty rows
-otu16m_df <- otu16m_df[rowSums(otu16m_df[,-1])>0,] # miseq (3638 removed)
-otu16n_df <- otu16n_df[rowSums(otu16n_df[,-1])>0,] # nanopor (2474 removed)
-
-# 18S
 colnames(reads_18) <- gsub("^s0","S0", colnames(reads_18)) # 713 cols
-r118 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 344 length 
-r218 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 340 length
-r318 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".3")) %>% colnames() # 12 length
+r118 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 344 
+r218 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 340 
+r318 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".3")) %>% colnames() # 12 
 r318_woSuffix <- gsub(".3$","",r318)
 
-# JOE SAYS: "On AWS the new Nanopore data is all rep 2, with the exception of 12 samples that already had 2 reps for 18S_616, which I made rep 3."
 otu18m_df <- reads_18 %>%
   select(ESVId, (starts_with("S0") & (ends_with(".1") | one_of(paste0(r318_woSuffix,".2"))))) %>%
   select(-one_of(paste0(r318_woSuffix,".1")))
@@ -109,41 +99,51 @@ otu18n_df <- reads_18 %>%
   select(ESVId, (starts_with("S0") & (ends_with(".2") | one_of(paste0(r318_woSuffix,".3"))))) %>%
   select(-one_of(paste0(r318_woSuffix,".2")))
 
-# Remove empty rows
-otu18m_df <- otu18m_df[rowSums(otu18m_df[,-1])>0,] # 18s miseq
-# dim(otu18m_df)
-# 11868   345
-otu18n_df <- otu18n_df[rowSums(otu18n_df[,-1])>0,] # 18s nanopore 
-# dim(otu18n_df)
-# 11868   341
-
-# Renee's 16
 colnames(reads_16ren) <- gsub("^s0","S0", colnames(reads_16ren))
 otu16ren_df <- reads_16ren %>%
-               select(ESVId, starts_with("S1") & ends_with(".1"))
-otu16ren_df <- otu16ren_df[rowSums(otu16ren_df[,-1])>0,] # Remove empty rows
+  select(ESVId, starts_with("S1") & ends_with(".1"))
 
-# Renee's 18
 colnames(reads_18ren) <- gsub("^s0","S0", colnames(reads_18ren))
 otu18ren_df <- reads_18ren %>%
-               select(ESVId, starts_with("S1") & ends_with(".1"))
+  select(ESVId, starts_with("S1") & ends_with(".1"))
+
+# Removing rows with zero sum 
+table(rowSums(otu16m_df[,-1])>0)
+otu16m_df <- otu16m_df[rowSums(otu16m_df[,-1])>0,] # 16 miseq 3638 removed
+
+table(rowSums(otu16n_df[,-1])>0)
+otu16n_df <- otu16n_df[rowSums(otu16n_df[,-1])>0,] # 16 nano 2474 removed
+
+table(rowSums(otu18m_df[,-1])>0) # 1586 removed
+otu18m_df <- otu18m_df[rowSums(otu18m_df[,-1])>0,] 
+
+table(rowSums(otu18n_df[,-1])>0) # 10292 removed 
+otu18n_df <- otu18n_df[rowSums(otu18n_df[,-1])>0,] 
+
+table(rowSums(otu16ren_df[,-1])>0)
+otu16ren_df <- otu16ren_df[rowSums(otu16ren_df[,-1])>0,] # No empty rows 
+
+table(rowSums(otu18ren_df[,-1])>0)
 otu18ren_df <- otu18ren_df[rowSums(otu18ren_df[,-1])>0,] # Remove empty rows
 
-### Remove suffixes from samplenames and make into a matrix
-# MISEQ RUN Original
+### Remove suffixes from samplenames 
 colnames(otu16m_df) <- gsub("[.]1","", colnames(otu16m_df))
 colnames(otu18m_df) <- gsub("[.]2", "", gsub("[.]1","", colnames(otu18m_df)))
 
+colnames(otu16n_df) <- gsub("[.]2","", colnames(otu16n_df))
+colnames(otu18n_df) <- gsub("[.]2", "", gsub("[.]3","", colnames(otu18n_df)))
+
+colnames(otu16ren_df) <- gsub("[.]1","", colnames(otu16ren_df))
+colnames(otu18ren_df) <- gsub("[.]1", "",colnames(otu18ren_df))
+
+### Make into a matrix
 otu16m_mat <- as.matrix(otu16m_df[,-1])
 rownames(otu16m_mat) <- otu16m_df[,1]
 # dim(otu16m_mat): 7990  343
+
 otu18m_mat <- as.matrix(otu18m_df[,-1])
 rownames(otu18m_mat) <- otu18m_df[,1]
 # dim(otu18m_mat): 11868   344
-
-# NANOPORE RUN Original
-colnames(otu16n_df) <- gsub("[.]2","", colnames(otu16n_df))
-colnames(otu18n_df) <- gsub("[.]2", "", gsub("[.]3","", colnames(otu18n_df)))
 
 otu16n_mat <- as.matrix(otu16n_df[,-1])
 rownames(otu16n_mat) <- otu16n_df[,1]
@@ -153,13 +153,10 @@ otu18n_mat <- as.matrix(otu18n_df[,-1])
 rownames(otu18n_mat) <- otu18n_df[,1]
 # dim(otu18n_mat): 11868   340
 
-# Renee's samples
-colnames(otu16ren_df) <- gsub("[.]1","", colnames(otu16ren_df))
-colnames(otu18ren_df) <- gsub("[.]1", "",colnames(otu18ren_df))
-
 otu16ren_mat <- as.matrix(otu16ren_df[,-1])
 rownames(otu16ren_mat) <- otu16ren_df[,1]
 # dim(otu16ren_mat): 684  23
+
 otu18ren_mat <- as.matrix(otu18ren_df[,-1])
 rownames(otu18ren_mat) <- otu18ren_df[,1]
 # dim(otu18ren_mat): 200  23
@@ -182,10 +179,15 @@ ReadDepth18n <- colSums(otu18n_mat) %>% as.data.frame() %>%
                 rename(ReadDepth18n=".")
 ReadDepth16ren <- colSums(otu16ren_mat) %>% as.data.frame() %>%
                 rownames_to_column(var="SampleId") %>%
-                rename(ReadDepth16n=".")
+                rename(ReadDepth16n=".") %>% 
+                mutate(ReadDepth16ren="ReadDepth16n")
+ReadDepth16ren$ReadDepth16ren <- as.numeric(ReadDepth16ren$ReadDepth16ren)
+
 ReadDepth18ren <- colSums(otu18ren_mat) %>% as.data.frame() %>%
                 rownames_to_column(var="SampleId") %>%
-                rename(ReadDepth18n=".")
+                rename(ReadDepth18n=".") %>% 
+                mutate(ReadDepth18ren="ReadDepth18n")
+ReadDepth18ren$ReadDepth18ren <- as.numeric(ReadDepth18ren$ReadDepth18ren)
 
 meta_adj <- meta_adj %>% 
             left_join(full_join(full_join(full_join(ReadDepth16m,ReadDepth18m), 
@@ -197,28 +199,21 @@ meta_adj <- meta_adj %>%
                                      "Crate 1: Unknown origin", 
                                      "Crate 2: Unknown origin")))
 
-meta_adj %>% 
-  ggplot() +
-  geom_point(aes(x=ReadDepth16m, y=ReadDepth16n))
-meta_adj %>% 
-  ggplot() +
-  geom_point(aes(x=ReadDepth18m, y=ReadDepth18n))
+# Look at diff in read depths 
+meta_adj %>% ggplot() + geom_point(aes(x=ReadDepth16m, y=ReadDepth16n))
+meta_adj %>% ggplot() + geom_point(aes(x=ReadDepth18m, y=ReadDepth18n))
 
 # What's up with those outliers?
 meta_adj %>% filter(ReadDepth18n>100000)
 
 # They are seemingly three random samples? Let's ignore and keep for now.
-meta_adj %>% 
-  ggplot() +
-  geom_point(aes(x=ReadDepth18n, y=ReadDepth16n, col=Captive.Wild))
+meta_adj %>% ggplot() + geom_point(aes(x=ReadDepth18n, y=ReadDepth16n, col=Captive.Wild))
 
 # Standardize date format
 meta_adj$Date.collected
 meta_adj %>% select(Country, Date.collected) %>% table()
 
-# the dashes look like SA dates (MM-DD-YYYY) whereas Nigerian samples look like DD/MM/YY.
-# Let's fix those...
-
+# Dashes look like SA dates (MM-DD-YYYY) whereas Nigerian = DD/MM/YY: Let's fix those...
 reformatDates <- as.data.frame(matrix(nrow=length(meta_adj$Date.collected), 
                                ncol=5, 
                                dimnames = list(NULL, c("Date.collected","Day","Month","Year","DateAdj"))))
@@ -277,13 +272,12 @@ meta_adj %>%
 tax16 <- reads_16 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
 tax16 <- tax16 %>%
   mutate(ScientificName = ifelse(Species!="", paste0(Genus, " ", Species),
-                                 ifelse(Genus !="", paste0(Genus, " sp"),
-                                        ifelse(Family!="", paste0("Family:", Family),
-                                               ifelse(Order!="", paste0("Order:", Order),
-                                                        ifelse(Class!="", paste0("Class:", Class),
-                                                               ifelse(Phylum!="", paste0("Phylum:",Phylum),
-                                                                      ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),
-                                                                             "Unassigned"))))))))
+                          ifelse(Genus !="", paste0(Genus, " sp"),
+                          ifelse(Family!="", paste0("Family:", Family),
+                          ifelse(Order!="", paste0("Order:", Order),
+                          ifelse(Class!="", paste0("Class:", Class),
+                          ifelse(Phylum!="", paste0("Phylum:",Phylum),
+                          ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),"Unassigned"))))))))
 # Split into nanopore and miseq
 tax16m <- tax16 %>% filter(ESVId %in% otu16m_df$ESVId)
 tax16n <- tax16 %>% filter(ESVId %in% otu16n_df$ESVId)
@@ -291,24 +285,23 @@ tax16n <- tax16 %>% filter(ESVId %in% otu16n_df$ESVId)
 # Get taxonomic assignments Renees
 tax16ren <- reads_16ren %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
   mutate(ScientificName = ifelse(Species!="", paste0(Genus, " ", Species),
-                                 ifelse(Genus !="", paste0(Genus, " sp"),
-                                        ifelse(Family!="", paste0("Family:", Family),
-                                               ifelse(Order!="", paste0("Order:", Order),
-                                                      ifelse(Class!="", paste0("Class:", Class),
-                                                             ifelse(Phylum!="", paste0("Phylum:",Phylum),
-                                                                    ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),
-                                                                           "Unassigned"))))))))
+                          ifelse(Genus !="", paste0(Genus, " sp"),
+                          ifelse(Family!="", paste0("Family:", Family),
+                          ifelse(Order!="", paste0("Order:", Order),
+                          ifelse(Class!="", paste0("Class:", Class),
+                          ifelse(Phylum!="", paste0("Phylum:",Phylum),
+                          ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),"Unassigned"))))))))
 
 ## Now 18S original
 tax18 <- reads_18 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
   mutate(ScientificName = ifelse(Species!="", gsub("_"," ", Species),
-                                 ifelse((Genus !="") & (Genus!=Family), paste0(Genus, " sp"),
-                                        ifelse((Family!="")& (Family!=Order), paste0("Family:", Family),
-                                               ifelse((Order!="")&(Order!=Class), paste0("Order:", Order),
-                                                      ifelse((Class!="")&(Class!=Phylum), paste0("Class:", Class),
-                                                             ifelse((Phylum!="") & (Phylum!=Kingdom), paste0("Phylum:",Phylum),
-                                                                    ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),
-                                                                           "Unassigned"))))))))
+                          ifelse((Genus !="") & (Genus!=Family), paste0(Genus, " sp"),
+                          ifelse((Family!="")& (Family!=Order), paste0("Family:", Family),
+                          ifelse((Order!="")&(Order!=Class), paste0("Order:", Order),
+                          ifelse((Class!="")&(Class!=Phylum), paste0("Class:", Class),
+                          ifelse((Phylum!="") & (Phylum!=Kingdom), paste0("Phylum:",Phylum),
+                          ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),"Unassigned"))))))))
+
 # Split into nanopore and miseq
 tax18m <- tax18 %>% filter(ESVId %in% otu18m_df$ESVId)
 tax18n <- tax18 %>% filter(ESVId %in% otu18n_df$ESVId)
@@ -316,39 +309,36 @@ tax18n <- tax18 %>% filter(ESVId %in% otu18n_df$ESVId)
 # 18s Ren
 tax18ren <- reads_18ren %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
   mutate(ScientificName = ifelse(Species!="", gsub("_"," ", Species),
-                                 ifelse((Genus !="") & (Genus!=Family), paste0(Genus, " sp"),
-                                        ifelse((Family!="")& (Family!=Order), paste0("Family:", Family),
-                                               ifelse((Order!="")&(Order!=Class), paste0("Order:", Order),
-                                                      ifelse((Class!="")&(Class!=Phylum), paste0("Class:", Class),
-                                                             ifelse((Phylum!="") & (Phylum!=Kingdom), paste0("Phylum:",Phylum),
-                                                                    ifelse(Kingdom!="", paste0("Kingdom:", Kingdom),
-                                                                           "Unassigned"))))))))
+                          ifelse((Genus !="") & (Genus!=Family), paste0(Genus, " sp"),
+                          ifelse((Family!="")& (Family!=Order), paste0("Family:", Family),
+                          ifelse((Order!="")&(Order!=Class), paste0("Order:", Order),
+                          ifelse((Class!="")&(Class!=Phylum), paste0("Class:", Class),
+                          ifelse((Phylum!="") & (Phylum!=Kingdom), paste0("Phylum:",Phylum),
+                          ifelse(Kingdom!="", paste0("Kingdom:", Kingdom), "Unassigned"))))))))
 
 ########## JONAS ASSIGNMENTS ##################
 # Processes tax data to classify each ESV as Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast, and reshapes the data into a binary presence/absence matrix, where each row represents a taxonomic type and each column an ESV
 
 ## 16S misiq original
 otu16m_bactornot <- tax16m %>% 
-  mutate(Type = ifelse(Kingdom=="Eukaryota",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                # ifelse(is.na(Phylum), "No phylum assigned",
-                                       ifelse(Family=="Mitochondria", Family, 
-                                              ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria"))))
-         , pres = 1) %>%
-  mutate(Type = ifelse(is.na(Type), "Bacteria", Type)) %>%
-  select(ESVId, Type, pres) %>%
-  filter(ESVId %in% c(rownames(otu16n_mat), rownames(otu16m_mat))) %>%
-  pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
-  column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
+  mutate(Type = ifelse(Kingdom=="Eukaryota",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+              # ifelse(is.na(Phylum), "No phylum assigned",
+                ifelse(Family=="Mitochondria", Family, 
+                ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria")))), pres = 1) %>%
+    mutate(Type = ifelse(is.na(Type), "Bacteria", Type)) %>%
+    select(ESVId, Type, pres) %>%
+    filter(ESVId %in% c(rownames(otu16n_mat), rownames(otu16m_mat))) %>%
+    pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
+    column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
 
 ## 16S nanopore original
 otu16n_bactornot <- tax16n %>% 
-  mutate(Type = ifelse(Kingdom=="Eukaryota",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                # ifelse(is.na(Phylum), "No phylum assigned",
-                                ifelse(Family=="Mitochondria", Family, 
-                                       ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria"))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Eukaryota", Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+              # ifelse(is.na(Phylum), "No phylum assigned",
+                ifelse(Family=="Mitochondria", Family, 
+                ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria")))), pres = 1) %>%
   mutate(Type = ifelse(is.na(Type), "Bacteria", Type)) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% c(rownames(otu16n_mat), rownames(otu16m_mat))) %>%
@@ -357,12 +347,11 @@ otu16n_bactornot <- tax16n %>%
 
 ## 16S ren
 otu16ren_bactornot <- tax16ren %>% 
-  mutate(Type = ifelse(Kingdom=="Eukaryota",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                # ifelse(is.na(Phylum), "No phylum assigned",
-                                ifelse(Family=="Mitochondria", Family, 
-                                       ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria"))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Eukaryota",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+              # ifelse(is.na(Phylum), "No phylum assigned",
+                ifelse(Family=="Mitochondria", Family, 
+                ifelse(Order == "Chloroplast", "Chloroplast", "Bacteria")))), pres = 1) %>%
   mutate(Type = ifelse(is.na(Type), "Bacteria", Type)) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% c(rownames(otu16ren_mat))) %>%
@@ -371,72 +360,36 @@ otu16ren_bactornot <- tax16ren %>%
 
 # aggregate OTU counts by taxonomic types
 otu16n_mat_bactornot <- otu16n_bactornot %*% otu16n_mat[match(colnames(otu16n_bactornot),rownames(otu16n_mat)),]
+
 # calculate relative abundance 
 otu16n_mat_bactornot_RA <- apply(otu16n_mat_bactornot, MARGIN=2, FUN=function(x) x/sum(x))
 
-# format for plotting nanopore original
-gg_16n_bactornot <- otu16n_mat_bactornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-
-gg_16n_bactornot
-#ggsave(gg_16n_bactornot, filename="01_process_and_clean_data/gg_16n_bactornot.png", height=6, width=10)
-
-# format for plotting miseq original
-otu16m_mat_bactornot <- otu16m_bactornot %*% otu16m_mat[match(colnames(otu16m_bactornot),rownames(otu16m_mat)),]
-otu16m_mat_bactornot_RA <- apply(otu16m_mat_bactornot, MARGIN=2, FUN=function(x) x/sum(x))
-gg_16m_bactornot <- otu16m_mat_bactornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_16m_bactornot
-#ggsave(gg_16m_bactornot, filename="01_process_and_clean_data/gg_16m_bactornot.png", height=6, width=10)
-
-# format for plotting Rene
-otu16ren_mat_bactornot <- otu16ren_bactornot %*% otu16ren_mat[match(colnames(otu16ren_bactornot),rownames(otu16ren_mat)),]
-otu16ren_mat_bactornot_RA <- apply(otu16ren_mat_bactornot, MARGIN=2, FUN=function(x) x/sum(x))
-gg_16ren_bactornot <- otu16ren_mat_bactornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_16ren_bactornot
-#ggsave(gg_16ren_bactornot, filename="01_process_and_clean_data/gg_16ren_bactornot.png", height=6, width=10)
 
 ### 18S
-# Processes tax data to classify each ESV as Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast, and reshapes the data into a binary presence/absence matrix, where each row represents a taxonomic type and each column an ESV
+# Classify ESV as Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast, and 
+# Reshapes the data into a binary presence/absence matrix, where each row represents a taxonomic type and each column an ESV
 
-#### 18s miseq original 
+#### 18s miseq Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast
 otu18m_eukornot <- tax18m %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="", "No kingdom assigned",
-                                       ifelse(is.na(Phylum)|(Phylum==""), "No phylum assigned", "Eukaryota (wphylum)"))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="", "No kingdom assigned",
+                ifelse(is.na(Phylum)|(Phylum==""), 
+                       "No phylum assigned", 
+                       "Eukaryota (wphylum)")))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18m_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
 
-#### 18s nano original 
+#### 18s nano Bacteria, Archaea, Eukaryota, Mitochondria, or Chloroplast
 otu18n_eukornot <- tax18n %>% 
   mutate(Type =ifelse(Kingdom=="Bacteria",Kingdom,
-                 ifelse(Kingdom=="Archaea", Kingdom,
-                         ifelse(Kingdom=="", "No kingdom assigned",
-                                ifelse(is.na(Phylum)|(Phylum==""), "No phylum assigned", "Eukaryota (wphylum)"))))
-         , pres = 1) %>%
+               ifelse(Kingdom=="Archaea", Kingdom,
+               ifelse(Kingdom=="", "No kingdom assigned",
+               ifelse(is.na(Phylum)|(Phylum==""), 
+                      "No phylum assigned", 
+                      "Eukaryota (wphylum)")))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18n_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
@@ -444,11 +397,12 @@ otu18n_eukornot <- tax18n %>%
 
 #### 18s Rene 
 otu18ren_eukornot <- tax18ren %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                        , ifelse(Kingdom=="Archaea", Kingdom,
-                                 ifelse(Kingdom=="", "No kingdom assigned",
-                                        ifelse(is.na(Phylum)|(Phylum==""), "No phylum assigned", "Eukaryota (wphylum)"))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="", "No kingdom assigned",
+                ifelse(is.na(Phylum)|(Phylum==""), 
+                       "No phylum assigned", 
+                       "Eukaryota (wphylum)")))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% c(rownames(otu18ren_mat))) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
@@ -457,44 +411,14 @@ otu18ren_eukornot <- tax18ren %>%
 # plot 18s miseq original
 otu18m_mat_eukornot <- otu18m_eukornot %*% otu18m_mat[match(colnames(otu18m_eukornot),rownames(otu18m_mat)),]
 otu18m_mat_eukornot_RA <- apply(otu18m_mat_eukornot, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18m_eukornot <- otu18m_mat_eukornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18m_eukornot
-#ggsave(gg_18m_eukornot, filename="01_process_and_clean_data/gg_18m_eukornot.png", height=6, width=10)
 
 # plot 18s nano original
 otu18n_mat_eukornot <- otu18n_eukornot %*% otu18n_mat[match(colnames(otu18n_eukornot),rownames(otu18n_mat)),]
 otu18n_mat_eukornot_RA <- apply(otu18n_mat_eukornot, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18n_eukornot <- otu18n_mat_eukornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18n_eukornot
-#ggsave(gg_18n_eukornot, filename="01_process_and_clean_data/gg_18n_eukornot.png", height=6, width=10)
 
 # plot 18s Rene
 otu18ren_mat_eukornot <- otu18ren_eukornot %*% otu18ren_mat[match(colnames(otu18ren_eukornot),rownames(otu18ren_mat)),]
 otu18ren_mat_eukornot_RA <- apply(otu18ren_mat_eukornot, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18ren_eukornot <- otu18ren_mat_eukornot_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18ren_eukornot
-#ggsave(gg_18ren_eukornot, filename="01_process_and_clean_data/gg_18ren_eukornot.png", height=6, width=10)
 
 
 ### 18S-- more detailed
@@ -502,82 +426,48 @@ keepPhylum <- c("Cnidaria","Mollusca","Porifera","Vertebrata","Chlorophyta", "Ar
 
 # Miseq
 otu18m_eukdetailed <- tax18m %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="","No kingdom assigned",
-                                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                       ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk")))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="","No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk"))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18m_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18m_mat_eukdetailed <- otu18m_eukdetailed %*% otu18m_mat[match(colnames(otu18m_eukdetailed),rownames(otu18m_mat)),]
 otu18m_mat_eukdetailed_RA <- apply(otu18m_mat_eukdetailed, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18m_eukdetailed <- otu18m_mat_eukdetailed_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18m_eukdetailed
-#ggsave(gg_18m_eukdetailed, filename="01_process_and_clean_data/gg_18m_eukdetailed.png", height=6, width=10)
 
 # Nanopore
 otu18n_eukdetailed <- tax18n %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="","No kingdom assigned",
-                                       ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                              ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk")))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="","No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk"))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18n_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18n_mat_eukdetailed <- otu18n_eukdetailed %*% otu18n_mat[match(colnames(otu18n_eukdetailed),rownames(otu18n_mat)),]
 otu18n_mat_eukdetailed_RA <- apply(otu18n_mat_eukdetailed, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18n_eukdetailed <- otu18n_mat_eukdetailed_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18n_eukdetailed
-#ggsave(gg_18n_eukdetailed, filename="01_process_and_clean_data/gg_18n_eukdetailed.png", height=6, width=10)
 
 # Renee
 otu18ren_eukdetailed <- tax18ren %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="","No kingdom assigned",
-                                       ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                              ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk")))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="","No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(Phylum %in% keepPhylum, Phylum, "MicroEuk"))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18ren_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18ren_mat_eukdetailed <- otu18ren_eukdetailed %*% otu18ren_mat[match(colnames(otu18ren_eukdetailed),rownames(otu18ren_mat)),]
 otu18ren_mat_eukdetailed_RA <- apply(otu18ren_mat_eukdetailed, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18ren_eukdetailed <- otu18ren_mat_eukdetailed_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18ren_eukdetailed
-#ggsave(gg_18ren_eukdetailed, filename="01_process_and_clean_data/gg_18ren_eukdetailed.png", height=6, width=10)
-
 
 ### 18S-- more detailed 2
 tax18 %>% filter(Class =="Embryophyta")
@@ -585,84 +475,52 @@ keepClass <- c("Aves","Gastropoda","Insecta","Mammalia","Embryophyta")
 
 # Miseq
 otu18m_eukdetailed2 <- tax18m %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="", "No kingdom assigned",
-                                       ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                              ifelse(!Phylum %in% keepPhylum, "MicroEuk",
-                                                     ifelse(Class %in% keepClass, Class, "Other macroeukaryote"))))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="", "No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(!Phylum %in% keepPhylum, "MicroEuk",
+                ifelse(Class %in% keepClass, Class, "Other macroeukaryote")))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18m_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18m_mat_eukdetailed2 <- otu18m_eukdetailed2 %*% otu18m_mat[match(colnames(otu18m_eukdetailed2),rownames(otu18m_mat)),]
 otu18m_mat_eukdetailed2_RA <- apply(otu18m_mat_eukdetailed2, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18m_eukdetailed2 <- otu18m_mat_eukdetailed2_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18m_eukdetailed2
-#ggsave(gg_18m_eukdetailed2, filename="01_process_and_clean_data/gg_18m_eukdetailed2.png", height=6, width=10)
 
 # Nanopore
 otu18n_eukdetailed2 <- tax18n %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="", "No kingdom assigned",
-                                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                       ifelse(!Phylum %in% keepPhylum, "MicroEuk",
-                                              ifelse(Class %in% keepClass, Class, "Other macroeukaryote"))))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="", "No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(!Phylum %in% keepPhylum, "MicroEuk",
+                ifelse(Class %in% keepClass, Class, "Other macroeukaryote")))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18n_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18n_mat_eukdetailed2 <- otu18n_eukdetailed2 %*% otu18n_mat[match(colnames(otu18n_eukdetailed2),rownames(otu18n_mat)),]
 otu18n_mat_eukdetailed2_RA <- apply(otu18n_mat_eukdetailed2, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18n_eukdetailed2 <- otu18n_mat_eukdetailed2_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18n_eukdetailed2
-#ggsave(gg_18n_eukdetailed2, filename="01_process_and_clean_data/gg_18n_eukdetailed2.png", height=6, width=10)
 
 # Renee
 otu18ren_eukdetailed2 <- tax18ren %>% 
-  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom
-                       , ifelse(Kingdom=="Archaea", Kingdom,
-                                ifelse(Kingdom=="", "No kingdom assigned",
-                                       ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
-                                              ifelse(!Phylum %in% keepPhylum, "MicroEuk",
-                                                     ifelse(Class %in% keepClass, Class, "Other macroeukaryote"))))))
-         , pres = 1) %>%
+  mutate(Type = ifelse(Kingdom=="Bacteria",Kingdom, 
+                ifelse(Kingdom=="Archaea", Kingdom,
+                ifelse(Kingdom=="", "No kingdom assigned",
+                ifelse(is.na(Phylum)|Phylum=="", "No phylum assigned", 
+                ifelse(!Phylum %in% keepPhylum, "MicroEuk",
+                ifelse(Class %in% keepClass, Class, "Other macroeukaryote")))))), pres = 1) %>%
   select(ESVId, Type, pres) %>%
   filter(ESVId %in% rownames(otu18ren_mat)) %>%
   pivot_wider(names_from="Type", values_from="pres", values_fill = 0) %>%
   column_to_rownames(var="ESVId") %>% as.matrix() %>% t()
-# rownames(otu18_eukornot)
+
 otu18ren_mat_eukdetailed2 <- otu18ren_eukdetailed2 %*% otu18ren_mat[match(colnames(otu18ren_eukdetailed2),rownames(otu18ren_mat)),]
 otu18ren_mat_eukdetailed2_RA <- apply(otu18ren_mat_eukdetailed2, MARGIN=2, FUN=function(x) x/sum(x))
-gg_18ren_eukdetailed2 <- otu18ren_mat_eukdetailed2_RA %>% as.data.frame() %>%
-  rownames_to_column(var="ReadIdentity") %>%
-  pivot_longer(-ReadIdentity, values_to="RA", names_to="SampleId") %>%
-  left_join(meta_adj) %>%
-  ggplot() +
-  geom_bar(aes(x=SampleId, y=RA, fill=ReadIdentity, col=ReadIdentity), stat="identity") +
-  facet_wrap(.~Captive.Wild, nrow=1, scales='free', drop=TRUE)+
-  theme(axis.text.x = element_blank())+ylab("Relative Abundance")
-gg_18ren_eukdetailed2
-#ggsave(gg_18ren_eukdetailed2, filename="01_process_and_clean_data/gg_18ren_eukdetailed2.png", height=6, width=10)
+
 
 #### Remove chloroplasts and mitochondria for 16S ####
 # Chloroplasts are Order level; Mitochondria are family level
@@ -699,7 +557,161 @@ otu18n_nohost_mat_filt <- otu18n_mat[which(rownames(otu18n_mat) %in% esv_18n_noh
 esv_18ren_nohost_filt <- esv_18ren_filt %>% filter(!is.na(Class), Class != "Actinopterygii", Class !="Aves", Class !="Mammalia")
 otu18ren_nohost_mat_filt <- otu18ren_mat[which(rownames(otu18ren_mat) %in% esv_18ren_nohost_filt$ESVId),]
 
+# Recalculate read depth after host DNA filtering
+ReadDepth16m_filt <- colSums(otu16m_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth16m_filt = ".")
 
+ReadDepth16n_filt <- colSums(otu16n_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth16n_filt = ".")
+
+ReadDepth16ren_filt <- colSums(otu16ren_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth16ren_filt = ".")
+
+ReadDepth18m_filt <- colSums(otu18m_nohost_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth18m_filt = ".")
+
+ReadDepth18n_filt <- colSums(otu18n_nohost_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth18n_filt = ".")
+
+ReadDepth18ren_filt <- colSums(otu18ren_nohost_mat_filt) %>%
+  as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
+  rename(ReadDepth18ren_filt = ".")
+
+meta_adj_filt <- meta_adj %>% 
+  left_join(full_join(full_join(full_join(ReadDepth16m_filt,ReadDepth18m_filt), 
+                                full_join(ReadDepth16n_filt, ReadDepth18n_filt)), 
+                      full_join(ReadDepth16ren_filt, ReadDepth18ren_filt)))
+
+# Plot 1: 16m
+p1 <- ggplot(meta_adj_filt, aes(x = ReadDepth16m, y = ReadDepth16m_filt)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "16m", x = "Original Read Depth (16m)", y = "Filtered Read Depth (16m)") +
+  theme_minimal()
+
+# Plot 2: 16n
+p2 <- ggplot(meta_adj_filt, aes(x = ReadDepth16n, y = ReadDepth16n_filt)) +
+  geom_point(alpha = 0.6) +
+  scale_x_continuous(labels = label_number()) +
+  scale_y_continuous(labels = label_number()) +
+  labs(title = "16n", x = "Original Read Depth (16n)", y = "Filtered Read Depth (16n)") +
+  theme_minimal()
+
+# Plot 3: 16ren
+p3 <- ggplot(meta_adj_filt, aes(x = ReadDepth16ren, y = ReadDepth16ren_filt)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "16ren", x = "Original Read Depth (16ren)", y = "Filtered Read Depth (16ren)") +
+  theme_minimal()
+
+# Plot 4: 18m
+p4 <- ggplot(meta_adj_filt, aes(x = ReadDepth18m, y = ReadDepth18m_filt)) +
+  geom_point(alpha = 0.6) +
+  scale_x_continuous(labels = label_number()) +
+  scale_y_continuous(labels = label_number()) +
+  labs(title = "18m", x = "Original Read Depth (18m)", y = "Filtered Read Depth (18m)") +
+  theme_minimal()
+
+# Plot 5: 18n
+p5 <- ggplot(meta_adj_filt, aes(x = ReadDepth18n, y = ReadDepth18n_filt)) +
+  geom_point(alpha = 0.6) +
+  scale_x_continuous(labels = label_number()) +
+  scale_y_continuous(labels = label_number()) +
+  labs(title = "18n", x = "Original Read Depth (18n)", y = "Filtered Read Depth (18n)") +
+  theme_minimal()
+
+# Plot 6: 18ren
+p6 <- ggplot(meta_adj_filt, aes(x = ReadDepth18ren, y = ReadDepth18ren_filt)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "18ren", x = "Original Read Depth (18ren)", y = "Filtered Read Depth (18ren)") +
+  theme_minimal()
+
+grid.arrange(p1, p2, p4, p5, ncol = 2)
+
+
+# Average read depth 
+filt_cols <- meta_adj_filt %>%
+  select(c("ReadDepth16m","ReadDepth16m_filt", 
+           "ReadDepth18m","ReadDepth18m_filt", 
+           "ReadDepth16n", "ReadDepth16n_filt", 
+           "ReadDepth18n","ReadDepth18n_filt"))
+filt_means <- colMeans(filt_cols, na.rm = TRUE)
+
+# 3. Convert to data frame for ggplot
+filt_df <- data.frame(FilteredMetric = names(filt_means),
+                      MeanReadDepth = filt_means)
+filt_df$FilteredMetric <- factor(filt_df$FilteredMetric,
+                                 levels = c("ReadDepth16m","ReadDepth16m_filt", 
+                                            "ReadDepth18m","ReadDepth18m_filt", 
+                                            "ReadDepth16n", "ReadDepth16n_filt", 
+                                            "ReadDepth18n","ReadDepth18n_filt",
+                                            "ReadDepth16ren","ReadDepth16ren_filt", 
+                                            "ReadDepth18ren","ReadDepth18ren_filt"))
+# Bar plot of mean read depth 
+ggplot(filt_df, aes(x = FilteredMetric, y = MeanReadDepth, fill = FilteredMetric)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(MeanReadDepth, 1)), 
+            vjust = -0.3, size = 3.5) +                      
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Average Read Depth",
+       x = "Filtered Column",
+       y = "Mean Read Depth") +
+  scale_fill_discrete(name = "Sequence Type")
+
+# Summary table:
+
+# Create summary table with basic loop
+summary_table <- data.frame(
+  FilteredMetric = character(),
+  Mean = numeric(),
+  Median = numeric(),
+  Min = numeric(),
+  Max = numeric(),
+  stringsAsFactors = FALSE)
+
+# Loop through each column and compute stats
+for (col in names(filt_cols)) {
+  col_data <- filt_cols[[col]]
+  summary_table <- rbind(summary_table, data.frame(
+    FilteredMetric = col,
+    Mean = mean(col_data, na.rm = TRUE),
+    Median = median(col_data, na.rm = TRUE),
+    Min = min(col_data, na.rm = TRUE),
+    Max = max(col_data, na.rm = TRUE)))
+}
+
+# View the table
+print(summary_table)
+knitr::kable(summary_table, format = "simple")
+
+# Look at coverage 
+hist(log10(colSums(otu16m_mat_filt)), breaks = 100) 
+plot(ecdf(x = log10(colSums(otu16m_mat_filt))))
+abline(v = log10(500), col = "blue")
+abline(v = log10(1000), col = "green")
+sample_counts <- colSums(otu16m_mat_filt)
+low_counts_blue <- sample_counts[sample_counts < 500]
+low_counts_green <- sample_counts[sample_counts < 1000]
+length(low_counts_blue)  
+length(low_counts_green)
+names(low_counts_blue)
+names(low_counts_green)
+
+hist(log10(colSums(otu16n_mat_filt)), breaks = 100) # Handful of bad samples
+plot(ecdf(x = log10(colSums(otu16n_mat_filt))))
+abline(v=log10(100))
+
+hist(log10(colSums(otu16ren_mat_filt)), breaks = 100) # Handful of bad samples
+hist(log10(colSums(otu18m_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
+hist(log10(colSums(otu18n_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
+hist(log10(colSums(otu18ren_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
+hist(log10(colSums(otu18m_nohost_mat_filt)), breaks = 100) # 
+hist(log10(colSums(otu18n_nohost_mat_filt)), breaks = 100) # 
+hist(log10(colSums(otu18ren_nohost_mat_filt)), breaks = 100) # 
 #### Looking at and removing (or not) rare sequences ####
 # NOTE: phyloseq recommends NOT removing rare sequences... so I'm keeping them here for now, but we can fix this later
 
@@ -713,7 +725,7 @@ for ( o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
   prevGrThan2 <- which(rowSums(temp>0) > 0) # Used to be 2; keeping 0 here
   temp2 <- temp[prevGrThan2,]
   # Turn counts of <5 to zero
-  lessThan5perSample <- temp2<0 # Used to be 5, keeping 9 here
+  lessThan5perSample <- temp2 <0 # Used to be 5, keeping 9 here
   temp2[lessThan5perSample] <- 0
   # How many have total reads less than 10?
   temp2 <- temp2[rowSums(temp2)>0,colSums(temp2)>0]
@@ -721,7 +733,9 @@ for ( o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
 }
 
 # 18S
-for ( o in c("otu18n_mat_filt", "otu18m_mat_filt", "otu18ren_mat_filt", "otu18n_nohost_mat_filt", "otu18m_nohost_mat_filt", "otu18ren_nohost_mat_filt")) {
+for ( o in c("otu18n_mat_filt", "otu18m_mat_filt", 
+             "otu18ren_mat_filt", "otu18n_nohost_mat_filt", 
+             "otu18m_nohost_mat_filt", "otu18ren_nohost_mat_filt")) {
   # Get current working file
   temp <- get(o)
   ### NOTE: I removed all filters because Phyloseq recommends keeping all low-count asvs
@@ -735,7 +749,6 @@ for ( o in c("otu18n_mat_filt", "otu18m_mat_filt", "otu18ren_mat_filt", "otu18n_
   which(rowSums(temp2)<0) # None, but let's remove those anyway #10?
   temp2 <- temp2[rowSums(temp2)>0,colSums(temp2)>0]
   assign(paste0(o,"2"), temp2)
-  
 }
 
 #### Looking at coverage depth to remove low-coverage samples ####
@@ -752,7 +765,7 @@ hist(log10(colSums(otu18ren_nohost_mat_filt2)), breaks = 100) #
 
 ####  Look at decay curves for sample cutoff ####
 # Miseq
-plot(ecdf(x =colSums(otu16m_mat_filt2) ))
+plot(ecdf(x =colSums(otu16m_mat_filt) ))
 abline(v=4000)
 # Nanopore
 plot(ecdf(x =colSums(otu16n_mat_filt2) ))
