@@ -640,16 +640,9 @@ filt_cols <- meta_adj_filt %>%
            "ReadDepth18n","ReadDepth18n_filt"))
 filt_means <- colMeans(filt_cols, na.rm = TRUE)
 
-# 3. Convert to data frame for ggplot
+# data frame for plot
 filt_df <- data.frame(FilteredMetric = names(filt_means),
                       MeanReadDepth = filt_means)
-filt_df$FilteredMetric <- factor(filt_df$FilteredMetric,
-                                 levels = c("ReadDepth16m","ReadDepth16m_filt", 
-                                            "ReadDepth18m","ReadDepth18m_filt", 
-                                            "ReadDepth16n", "ReadDepth16n_filt", 
-                                            "ReadDepth18n","ReadDepth18n_filt",
-                                            "ReadDepth16ren","ReadDepth16ren_filt", 
-                                            "ReadDepth18ren","ReadDepth18ren_filt"))
 # Bar plot of mean read depth 
 ggplot(filt_df, aes(x = FilteredMetric, y = MeanReadDepth, fill = FilteredMetric)) +
   geom_bar(stat = "identity") +
@@ -688,30 +681,96 @@ for (col in names(filt_cols)) {
 print(summary_table)
 knitr::kable(summary_table, format = "simple")
 
-# Look at coverage 
-hist(log10(colSums(otu16m_mat_filt)), breaks = 100) 
-plot(ecdf(x = log10(colSums(otu16m_mat_filt))))
-abline(v = log10(500), col = "blue")
-abline(v = log10(1000), col = "green")
-sample_counts <- colSums(otu16m_mat_filt)
-low_counts_blue <- sample_counts[sample_counts < 500]
-low_counts_green <- sample_counts[sample_counts < 1000]
-length(low_counts_blue)  
-length(low_counts_green)
-names(low_counts_blue)
-names(low_counts_green)
+# Look at coverage function
+analyze_coverage <- function(otu_mat, sample_name = "Sample") {
+  sample_counts <- colSums(otu_mat)
+  
+  # Histogram of log10 counts
+  hist(log10(sample_counts), breaks = 100, main = paste("Coverage Histogram:", sample_name),
+       xlab = "log10(Sample Sum)", col = "lightgray", border = "white")
+  
+  # ECDF plot
+  plot(ecdf(log10(sample_counts)), main = paste("ECDF:", sample_name),
+       xlab = "log10(Sample Sum)", ylab = "Proportion of Samples")
+  abline(v = log10(1000), col = "skyblue", lty = 2)
+  abline(v = log10(2000), col = "forestgreen", lty = 2)
+  
+  # Counts below thresholds
+  low_counts_blue <- sample_counts[sample_counts < 500]
+  low_counts_green <- sample_counts[sample_counts < 1000]
+  
+  # Print stats
+  cat("\n---", sample_name, "---\n")
+  cat("Samples with <1000 reads:", length(low_counts_blue), "\n")
+  cat("Samples with <2000 reads:", length(low_counts_green), "\n")
+  cat("Names of <1000 samples:\n"); print(names(low_counts_blue))
+  cat("Names of <2000 samples:\n"); print(names(low_counts_green))
+}
 
-hist(log10(colSums(otu16n_mat_filt)), breaks = 100) # Handful of bad samples
-plot(ecdf(x = log10(colSums(otu16n_mat_filt))))
-abline(v=log10(100))
+### Cov function
+analyze_coverage <- function(otu_mat, sample_name = "Sample") {
+  sample_counts <- colSums(otu_mat)
+  log_counts <- log10(sample_counts)
+  
+  # Calculate summary stats
+  Q1 <- quantile(log_counts, 0.25)
+  Q3 <- quantile(log_counts, 0.75)
+  IQR_val <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR_val
+  outliers <- names(sample_counts[log_counts < lower_bound])
+  
+  # Histogram
+  hist(log_counts, breaks = 100, main = paste("Coverage Histogram:", sample_name),
+       xlab = "log10(Sample Sum)", col = "lightgray", border = "white")
+  
+  # ECDF plot with IQR lines
+  plot(ecdf(log_counts), main = paste("ECDF:", sample_name),
+       xlab = "log10(Sample Sum)", ylab = "Proportion of Samples")
+  abline(v = Q1, col = "red", lty = 2, lwd = 2)
+  abline(v = Q3, col = "darkgreen", lty = 2, lwd = 2)
+  abline(v = lower_bound, col = "purple", lty = 1, lwd = 2)
+  
+  legend("bottomright", legend = c("Q1", "Q3", "Lower Bound (Outlier Cutoff)"),
+         col = c("red", "darkgreen", "purple"), lty = c(2, 2, 1), lwd = 2, bty = "n")
+  
+  # Print stats
+  low_counts_1000 <- sample_counts[sample_counts < 1000]
+  low_counts_2000 <- sample_counts[sample_counts < 2000]
+  
+  cat("\n---", sample_name, "---\n")
+  cat("Samples with <1000 reads:", length(low_counts_1000), "\n")
+  cat("Samples with <2000 reads:", length(low_counts_2000), "\n")
+  cat("Names of <1000 samples:\n"); print(names(low_counts_1000))
+  cat("Names of <2000 samples:\n"); print(names(low_counts_2000))
+  cat("Outliers by IQR method (log10 < ", round(lower_bound, 2), "):\n", sep = "")
+  print(outliers)
+}
 
-hist(log10(colSums(otu16ren_mat_filt)), breaks = 100) # Handful of bad samples
-hist(log10(colSums(otu18m_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18n_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18ren_mat_filt)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18m_nohost_mat_filt)), breaks = 100) # 
-hist(log10(colSums(otu18n_nohost_mat_filt)), breaks = 100) # 
-hist(log10(colSums(otu18ren_nohost_mat_filt)), breaks = 100) # 
+otu_list <- list(
+  "otu16m" = otu16m_mat,
+  "otu16m_filt" = otu16m_mat_filt,
+  "otu16n" = otu16n_mat,
+  "otu16n_filt" = otu16n_mat_filt,
+  "otu18m" = otu18m_mat,
+  "otu18m_filt" = otu18m_mat_filt,
+  "otu18n" = otu18n_mat,
+  "otu18n_filt" = otu18n_mat_filt)
+
+pdf("coverage_plots.pdf", width = 8, height = 16)  # Adjust size as needed
+par(mfrow = c(8, 2))
+for (name in names(otu_list)) {
+  analyze_coverage(otu_list[[name]], sample_name = name)
+}
+dev.off()
+
+pdf("otu_coverage_plots.pdf", width = 10, height = 20)  # You can adjust this
+par(mfrow = c(8, 2))  # or (4, 2), (4, 4), etc., depending on how many plots you want per page
+for (name in names(otu_list)) {
+  analyze_coverage(otu_list[[name]], sample_name = name)
+}
+dev.off()
+
+
 #### Looking at and removing (or not) rare sequences ####
 # NOTE: phyloseq recommends NOT removing rare sequences... so I'm keeping them here for now, but we can fix this later
 
