@@ -9,6 +9,10 @@ library(phyloseq)
 library(lubridate)
 library(ggplot2)
 library(gridExtra)
+library(scales)
+library(calecopal)
+
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 
 # dir.create("01_process_and_clean_data")
 if (!dir.exists("01_process_and_clean_data")) {
@@ -179,15 +183,13 @@ ReadDepth18n <- colSums(otu18n_mat) %>% as.data.frame() %>%
                 rename(ReadDepth18n=".")
 ReadDepth16ren <- colSums(otu16ren_mat) %>% as.data.frame() %>%
                 rownames_to_column(var="SampleId") %>%
-                rename(ReadDepth16n=".") %>% 
-                mutate(ReadDepth16ren="ReadDepth16n")
-ReadDepth16ren$ReadDepth16ren <- as.numeric(ReadDepth16ren$ReadDepth16ren)
+                rename(ReadDepth16n=".")
+ReadDepth16ren$ReadDepth16ren <- as.numeric(ReadDepth16ren$ReadDepth16n)
 
 ReadDepth18ren <- colSums(otu18ren_mat) %>% as.data.frame() %>%
                 rownames_to_column(var="SampleId") %>%
-                rename(ReadDepth18n=".") %>% 
-                mutate(ReadDepth18ren="ReadDepth18n")
-ReadDepth18ren$ReadDepth18ren <- as.numeric(ReadDepth18ren$ReadDepth18ren)
+                rename(ReadDepth18ren=".")
+ReadDepth18ren$ReadDepth18n <- ReadDepth18ren$ReadDepth18ren
 
 meta_adj <- meta_adj %>% 
             left_join(full_join(full_join(full_join(ReadDepth16m,ReadDepth18m), 
@@ -268,6 +270,7 @@ meta_adj %>%
   ggplot() +
   geom_jitter(aes(x=Captive.Wild, y=ReadDepth18n, col=Tube.type))
 
+# STEP 1: 
 #### Get taxonomic assignments original (from Jonah) ####
 tax16 <- reads_16 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
 tax16 <- tax16 %>%
@@ -557,6 +560,9 @@ otu18n_nohost_mat_filt <- otu18n_mat[which(rownames(otu18n_mat) %in% esv_18n_noh
 esv_18ren_nohost_filt <- esv_18ren_filt %>% filter(!is.na(Class), Class != "Actinopterygii", Class !="Aves", Class !="Mammalia")
 otu18ren_nohost_mat_filt <- otu18ren_mat[which(rownames(otu18ren_mat) %in% esv_18ren_nohost_filt$ESVId),]
 
+
+# STEP 2: 
+
 # Recalculate read depth after host DNA filtering
 ReadDepth16m_filt <- colSums(otu16m_mat_filt) %>%
   as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
@@ -568,7 +574,8 @@ ReadDepth16n_filt <- colSums(otu16n_mat_filt) %>%
 
 ReadDepth16ren_filt <- colSums(otu16ren_mat_filt) %>%
   as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
-  rename(ReadDepth16ren_filt = ".")
+  rename(ReadDepth16n_filt = ".")
+ReadDepth16ren_filt$ReadDepth16ren_filt <- ReadDepth16ren_filt$ReadDepth16n_filt
 
 ReadDepth18m_filt <- colSums(otu18m_nohost_mat_filt) %>%
   as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
@@ -580,7 +587,8 @@ ReadDepth18n_filt <- colSums(otu18n_nohost_mat_filt) %>%
 
 ReadDepth18ren_filt <- colSums(otu18ren_nohost_mat_filt) %>%
   as.data.frame() %>% rownames_to_column(var = "SampleId") %>%
-  rename(ReadDepth18ren_filt = ".")
+  rename(ReadDepth18n_filt = ".")
+ReadDepth18ren_filt$ReadDepth18ren_filt <- ReadDepth18ren_filt$ReadDepth18n_filt
 
 meta_adj_filt <- meta_adj %>% 
   left_join(full_join(full_join(full_join(ReadDepth16m_filt,ReadDepth18m_filt), 
@@ -629,35 +637,41 @@ p6 <- ggplot(meta_adj_filt, aes(x = ReadDepth18ren, y = ReadDepth18ren_filt)) +
   labs(title = "18ren", x = "Original Read Depth (18ren)", y = "Filtered Read Depth (18ren)") +
   theme_minimal()
 
-grid.arrange(p1, p2, p4, p5, ncol = 2)
-
+post_filt_depths <- grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 2)
+ggsave("01.1_qc_checks/read_depth_pre_post_filtering_host.png", post_filt_depths, height=7, width=6)
 
 # Average read depth 
 filt_cols <- meta_adj_filt %>%
   select(c("ReadDepth16m","ReadDepth16m_filt", 
            "ReadDepth18m","ReadDepth18m_filt", 
            "ReadDepth16n", "ReadDepth16n_filt", 
-           "ReadDepth18n","ReadDepth18n_filt"))
+           "ReadDepth18n","ReadDepth18n_filt",
+           "ReadDepth16ren", "ReadDepth16ren_filt",
+           "ReadDepth18ren", "ReadDepth18ren_filt"))
 filt_means <- colMeans(filt_cols, na.rm = TRUE)
 
 # data frame for plot
 filt_df <- data.frame(FilteredMetric = names(filt_means),
                       MeanReadDepth = filt_means)
 # Bar plot of mean read depth 
-ggplot(filt_df, aes(x = FilteredMetric, y = MeanReadDepth, fill = FilteredMetric)) +
+bigsur = c("#E4DECE","#F5DECE", "#ECBD95", "#ECBD82", "#8CA1BB", "#8CA1CB", 
+           "#79ACBD", "#89BBBD", "#346575", "#277575", "#1F5529", "#3A5139")
+mean_depth <- ggplot(filt_df, aes(x = FilteredMetric, y = MeanReadDepth, 
+                    fill = FilteredMetric)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = round(MeanReadDepth, 1)), 
             vjust = -0.3, size = 3.5) +                      
-  theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Average Read Depth",
+  labs(title = "Average Read Depth Pre & Post Host DNA Filtering",
        x = "Filtered Column",
        y = "Mean Read Depth") +
-  scale_fill_discrete(name = "Sequence Type")
+  scale_fill_discrete(name = "Sequence Type") +
+  scale_fill_manual(values = bigsur) 
+ggsave("01.1_qc_checks/average_depth_pre_post_filtering_bar.png", mean_depth, height=5, width=8)
 
-# Summary table:
+# Summary table of Read Depths :
 
-# Create summary table with basic loop
+# Create summary table of read depths 
 summary_table <- data.frame(
   FilteredMetric = character(),
   Mean = numeric(),
@@ -679,35 +693,9 @@ for (col in names(filt_cols)) {
 
 # View the table
 print(summary_table)
-knitr::kable(summary_table, format = "simple")
 
-# Look at coverage function
-analyze_coverage <- function(otu_mat, sample_name = "Sample") {
-  sample_counts <- colSums(otu_mat)
-  
-  # Histogram of log10 counts
-  hist(log10(sample_counts), breaks = 100, main = paste("Coverage Histogram:", sample_name),
-       xlab = "log10(Sample Sum)", col = "lightgray", border = "white")
-  
-  # ECDF plot
-  plot(ecdf(log10(sample_counts)), main = paste("ECDF:", sample_name),
-       xlab = "log10(Sample Sum)", ylab = "Proportion of Samples")
-  abline(v = log10(1000), col = "skyblue", lty = 2)
-  abline(v = log10(2000), col = "forestgreen", lty = 2)
-  
-  # Counts below thresholds
-  low_counts_blue <- sample_counts[sample_counts < 500]
-  low_counts_green <- sample_counts[sample_counts < 1000]
-  
-  # Print stats
-  cat("\n---", sample_name, "---\n")
-  cat("Samples with <1000 reads:", length(low_counts_blue), "\n")
-  cat("Samples with <2000 reads:", length(low_counts_green), "\n")
-  cat("Names of <1000 samples:\n"); print(names(low_counts_blue))
-  cat("Names of <2000 samples:\n"); print(names(low_counts_green))
-}
 
-### Cov function
+### Read Coverage function
 analyze_coverage <- function(otu_mat, sample_name = "Sample") {
   sample_counts <- colSums(otu_mat)
   log_counts <- log10(sample_counts)
@@ -718,10 +706,20 @@ analyze_coverage <- function(otu_mat, sample_name = "Sample") {
   IQR_val <- Q3 - Q1
   lower_bound <- Q1 - 1.5 * IQR_val
   outliers <- names(sample_counts[log_counts < lower_bound])
+  # Define log threshold for read depth of 20
+  read_depth_thresh_20 <- 20
+  read_depth_thresh_50 <- 50
+  read_depth_thresh_500 <- 500
+  threshold_20 <- log10(read_depth_thresh_20)
+  threshold_50 <- log10(read_depth_thresh_40)
+  threshold_500 <- log10(read_depth_thresh_500)
   
   # Histogram
   hist(log_counts, breaks = 100, main = paste("Coverage Histogram:", sample_name),
        xlab = "log10(Sample Sum)", col = "lightgray", border = "white")
+  abline(v = threshold_20, col = "blue", lty = 3, lwd = 2)
+  abline(v = threshold_50, col = "#4052D6", lty = 3, lwd = 2)
+  abline(v = threshold_500, col = "#1591EA", lty = 3, lwd = 2)
   
   # ECDF plot with IQR lines
   plot(ecdf(log_counts), main = paste("ECDF:", sample_name),
@@ -729,17 +727,28 @@ analyze_coverage <- function(otu_mat, sample_name = "Sample") {
   abline(v = Q1, col = "red", lty = 2, lwd = 2)
   abline(v = Q3, col = "darkgreen", lty = 2, lwd = 2)
   abline(v = lower_bound, col = "purple", lty = 1, lwd = 2)
+  abline(v = threshold_20, col = "blue", lty = 3, lwd = 2)
+  abline(v = threshold_50, col = "#4052D6", lty = 3, lwd = 2)
+  abline(v = threshold_500, col = "#1591EA", lty = 3, lwd = 2)
   
-  legend("bottomright", legend = c("Q1", "Q3", "Lower Bound (Outlier Cutoff)"),
-         col = c("red", "darkgreen", "purple"), lty = c(2, 2, 1), lwd = 2, bty = "n")
+  legend("bottomright",
+         legend = c("Q1", "Q3", "Lower Bound (Outlier Cutoff)", 
+                    paste("Read Depth <", threshold_20),
+                    paste("Read Depth <", threshold_50),
+                    paste("Read Depth <", threshold_500)),
+         col = c("red", "darkgreen", "purple", "blue", "#4052D6", "#1591EA"),
+         lty = c(2, 2, 1, 3), lwd = 2, bty = "n")
   
   # Print stats
+  low_counts_20 <- sample_counts[sample_counts < read_depth_threshold]
   low_counts_1000 <- sample_counts[sample_counts < 1000]
   low_counts_2000 <- sample_counts[sample_counts < 2000]
   
   cat("\n---", sample_name, "---\n")
+  cat("Samples with <", threshold_20, "reads:", length(low_counts_20), "\n")
   cat("Samples with <1000 reads:", length(low_counts_1000), "\n")
   cat("Samples with <2000 reads:", length(low_counts_2000), "\n")
+  cat("Names of <", threshold_20, " samples:\n"); print(names(low_counts_20))
   cat("Names of <1000 samples:\n"); print(names(low_counts_1000))
   cat("Names of <2000 samples:\n"); print(names(low_counts_2000))
   cat("Outliers by IQR method (log10 < ", round(lower_bound, 2), "):\n", sep = "")
@@ -754,27 +763,26 @@ otu_list <- list(
   "otu18m" = otu18m_mat,
   "otu18m_filt" = otu18m_mat_filt,
   "otu18n" = otu18n_mat,
-  "otu18n_filt" = otu18n_mat_filt)
+  "otu18n_filt" = otu18n_mat_filt,
+  "otu16ren" = otu16ren_mat,
+  "otu16ren_filt" = otu16ren_mat_filt,
+  "otu18ren" = otu18ren_mat, 
+  "otu18ren_filt" = otu18ren_nohost_mat_filt)
 
-pdf("coverage_plots.pdf", width = 8, height = 16)  # Adjust size as needed
-par(mfrow = c(8, 2))
+pdf("01.1_qc_checks/coverage_plots.pdf", width = 8, height = 30)  # Adjust size as needed
+par(mfrow = c(12, 2))
 for (name in names(otu_list)) {
   analyze_coverage(otu_list[[name]], sample_name = name)
 }
 dev.off()
 
-pdf("otu_coverage_plots.pdf", width = 10, height = 20)  # You can adjust this
-par(mfrow = c(8, 2))  # or (4, 2), (4, 4), etc., depending on how many plots you want per page
-for (name in names(otu_list)) {
-  analyze_coverage(otu_list[[name]], sample_name = name)
-}
-dev.off()
 
+# Step 3: 
 
 #### Looking at and removing (or not) rare sequences ####
 # NOTE: phyloseq recommends NOT removing rare sequences... so I'm keeping them here for now, but we can fix this later
 
-# 16S
+# 16S (old)
 # Prevalence of OTUs
 for ( o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
   # Get current working file
@@ -789,6 +797,55 @@ for ( o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
   # How many have total reads less than 10?
   temp2 <- temp2[rowSums(temp2)>0,colSums(temp2)>0]
   assign(paste0(o,"2"), temp2)
+}
+
+# 16S
+# taxa not seen more than 2 times in at least 10% of the samples can be removed? 
+# Prevalence of OTUs
+for (o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
+  # Get current working file
+  temp <- get(o)# Plot histogram of total reads per sample (column sums)
+  sample_sums <- colSums(temp)
+  df_plot <- data.frame(sample = names(sample_sums), reads = sample_sums)
+  
+  # Remove counts 
+  min_count <- 2
+  min_sample_fraction_10 <- 0.10
+  min_sample_fraction_20 <- 0.20
+  min_sample_count_10 <- ceiling(ncol(temp) * min_sample_fraction_10)  # of samples (cols) needed
+  min_sample_count_20 <- ceiling(ncol(temp) * min_sample_fraction_20)
+  
+  p <- ggplot(df_plot, aes(x = reads)) +
+    geom_histogram(binwidth = 1000, fill = "steelblue", color = "black") +
+    geom_vline(xintercept = min_sample_count_10, linetype = "dashed", color = "red") +
+    geom_vline(xintercept = min_sample_count_20, linetype = "dashed", color = "purple") +
+    theme_minimal() +
+    labs(title = paste("OTU count distribution per sample -", o),
+         x = "Total OTUs per sample", y = "Frequency")
+  print(p)
+  
+  presence_matrix <- temp > min_count
+  samples_per_taxa <- rowSums(presence_matrix) # samples per taxa meet that criterion
+  otu_filtered_10 <- temp[samples_per_taxa >= min_sample_count_10, ]  # Keep taxa meeting threshold
+  otu_filtered_20 <- temp[samples_per_taxa >= min_sample_count_20, ]
+  dim(otu_filtered_10)
+  dim(otu_filtered_20)
+  
+  # Print filtering summary 10 %
+  cat("Filtering", o, " 10% ", "\n")
+  cat("Original taxa:", nrow(temp), "\n")
+  cat("Removed taxa with 10% thresh:", nrow(temp) - nrow(otu_filtered_10), "\n")
+  cat("Remaining taxa:", nrow(otu_filtered_10), "\n\n")
+  
+  # Print filtering summary 20 %
+  cat("Filtering", o, " 20% ", "\n")
+  cat("Original taxa:", nrow(temp), "\n")
+  cat("Removed taxa with 20% thresh:", nrow(temp) - nrow(otu_filtered_20), "\n")
+  cat("Remaining taxa:", nrow(otu_filtered_20), "\n\n")
+  
+  # Optionally save the filtered matrix back with a new name
+  assign(paste0(o, "_count_thresh_10"), otu_filtered_10)
+  assign(paste0(o, "_count_thresh_20"), otu_filtered_10)
 }
 
 # 18S
@@ -891,6 +948,7 @@ for ( o in c("m","n","ren")) {
   esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
   cat("Retained taxonomy entries (ESV):", nrow(esv_final_temp), "\n")
   cat("Taxonomy entries removed:", nrow(esv_filt_temp) - nrow(esv_final_temp), "\n")
+  
   # Set up phyloseq objects
   meta_phyloseq_temp <- meta_temp %>%
     column_to_rownames("SampleId") 
