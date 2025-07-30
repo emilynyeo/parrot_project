@@ -561,7 +561,7 @@ esv_18ren_nohost_filt <- esv_18ren_filt %>% filter(!is.na(Class), Class != "Acti
 otu18ren_nohost_mat_filt <- otu18ren_mat[which(rownames(otu18ren_mat) %in% esv_18ren_nohost_filt$ESVId),]
 
 
-# STEP 2: 
+# # # #  STEP 2: # # # # 
 
 # Recalculate read depth after host DNA filtering
 ReadDepth16m_filt <- colSums(otu16m_mat_filt) %>%
@@ -698,30 +698,49 @@ print(summary_table)
 ### Read Coverage function
 analyze_coverage <- function(otu_mat, sample_name = "Sample") {
   sample_counts <- colSums(otu_mat)
+  sample_counts <- sample_counts[sample_counts > 0]  # Remove zero-count samples
+  
+  if (length(sample_counts) == 0) {
+    warning(paste("All samples have zero counts in", sample_name))
+    return()
+  }
+  
   log_counts <- log10(sample_counts)
   
-  # Calculate summary stats
+  # Summary stats
   Q1 <- quantile(log_counts, 0.25)
   Q3 <- quantile(log_counts, 0.75)
   IQR_val <- Q3 - Q1
   lower_bound <- Q1 - 1.5 * IQR_val
   outliers <- names(sample_counts[log_counts < lower_bound])
-  # Define log threshold for read depth of 20
+  
+  # Thresholds
   read_depth_thresh_20 <- 20
   read_depth_thresh_50 <- 50
   read_depth_thresh_500 <- 500
   threshold_20 <- log10(read_depth_thresh_20)
-  threshold_50 <- log10(read_depth_thresh_40)
+  threshold_50 <- log10(read_depth_thresh_50)
   threshold_500 <- log10(read_depth_thresh_500)
   
-  # Histogram
+  # Counts below thresholds
+  low_counts_20 <- sample_counts[sample_counts < read_depth_thresh_20]
+  low_counts_50 <- sample_counts[sample_counts < read_depth_thresh_50]
+  low_counts_500 <- sample_counts[sample_counts < read_depth_thresh_500]
+  
+  # Create layout: 2 rows (histogram + ECDF) + 1 for text
+  layout(matrix(c(1, 2,
+                  3, 0), 
+                nrow = 2, byrow = TRUE),
+         heights = c(0.5, 0.5))  # Adjust heights if needed
+  
+  ## Plot 1: Histogram
   hist(log_counts, breaks = 100, main = paste("Coverage Histogram:", sample_name),
        xlab = "log10(Sample Sum)", col = "lightgray", border = "white")
   abline(v = threshold_20, col = "blue", lty = 3, lwd = 2)
   abline(v = threshold_50, col = "#4052D6", lty = 3, lwd = 2)
   abline(v = threshold_500, col = "#1591EA", lty = 3, lwd = 2)
   
-  # ECDF plot with IQR lines
+  ## Plot 2: ECDF
   plot(ecdf(log_counts), main = paste("ECDF:", sample_name),
        xlab = "log10(Sample Sum)", ylab = "Proportion of Samples")
   abline(v = Q1, col = "red", lty = 2, lwd = 2)
@@ -732,28 +751,27 @@ analyze_coverage <- function(otu_mat, sample_name = "Sample") {
   abline(v = threshold_500, col = "#1591EA", lty = 3, lwd = 2)
   
   legend("bottomright",
-         legend = c("Q1", "Q3", "Lower Bound (Outlier Cutoff)", 
-                    paste("Read Depth <", threshold_20),
-                    paste("Read Depth <", threshold_50),
-                    paste("Read Depth <", threshold_500)),
+         legend = c("Q1", "Q3", "Outlier Cutoff",  
+                    "<20 reads", "<50 reads", "<500 reads"),
          col = c("red", "darkgreen", "purple", "blue", "#4052D6", "#1591EA"),
-         lty = c(2, 2, 1, 3), lwd = 2, bty = "n")
+         lty = c(2, 2, 1, 3, 3, 3), lwd = 2, bty = "n")
   
-  # Print stats
-  low_counts_20 <- sample_counts[sample_counts < read_depth_threshold]
-  low_counts_1000 <- sample_counts[sample_counts < 1000]
-  low_counts_2000 <- sample_counts[sample_counts < 2000]
   
-  cat("\n---", sample_name, "---\n")
-  cat("Samples with <", threshold_20, "reads:", length(low_counts_20), "\n")
-  cat("Samples with <1000 reads:", length(low_counts_1000), "\n")
-  cat("Samples with <2000 reads:", length(low_counts_2000), "\n")
-  cat("Names of <", threshold_20, " samples:\n"); print(names(low_counts_20))
-  cat("Names of <1000 samples:\n"); print(names(low_counts_1000))
-  cat("Names of <2000 samples:\n"); print(names(low_counts_2000))
-  cat("Outliers by IQR method (log10 < ", round(lower_bound, 2), "):\n", sep = "")
-  print(outliers)
+  ## Plot 3: Text Panel
+  plot.new()
+  text(x = 0, y = 1, adj = c(0, 1), cex = 0.9, labels = paste0(
+    "--- ", sample_name, " ---\n",
+    "Mean reads / samples: ", round(mean(sample_counts), 2), "\n",
+    "Median reads / samples: ", round(median(sample_counts, na.rm = TRUE), 2), "\n",
+    "Min reads / samples: ", round(min(sample_counts, na.rm = TRUE), 2), "\n",
+    "Max reads / samples: ", round(max(sample_counts, na.rm = TRUE), 2), "\n",
+    "Samples with < 20 reads: ", length(low_counts_20), "\n",
+    "Samples with < 50 reads: ", length(low_counts_50), "\n",
+    "Samples with < 500 reads: ", length(low_counts_500), "\n",
+    "IQR Outliers (log10 < ", round(lower_bound, 2), "): ", length(outliers)
+  ))
 }
+
 
 otu_list <- list(
   "otu16m" = otu16m_mat,
@@ -761,58 +779,67 @@ otu_list <- list(
   "otu16n" = otu16n_mat,
   "otu16n_filt" = otu16n_mat_filt,
   "otu18m" = otu18m_mat,
-  "otu18m_filt" = otu18m_mat_filt,
+  "otu18m_filt" = otu18m_nohost_mat_filt,
   "otu18n" = otu18n_mat,
-  "otu18n_filt" = otu18n_mat_filt,
+  "otu18n_filt" = otu18n_nohost_mat_filt,
   "otu16ren" = otu16ren_mat,
   "otu16ren_filt" = otu16ren_mat_filt,
   "otu18ren" = otu18ren_mat, 
   "otu18ren_filt" = otu18ren_nohost_mat_filt)
 
-pdf("01.1_qc_checks/coverage_plots.pdf", width = 8, height = 30)  # Adjust size as needed
-par(mfrow = c(12, 2))
+pdf("01.1_qc_checks/coverage_plots.pdf", width = 8, height = 7)  # Adjust size as needed
+#par(mfrow = c(13, 2))
 for (name in names(otu_list)) {
   analyze_coverage(otu_list[[name]], sample_name = name)
 }
 dev.off()
 
+## Ok now remove low read counts 
 
-# Step 3: 
-
-#### Looking at and removing (or not) rare sequences ####
-# NOTE: phyloseq recommends NOT removing rare sequences... so I'm keeping them here for now, but we can fix this later
-
-# 16S (old)
-# Prevalence of OTUs
-for ( o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
-  # Get current working file
-  temp <- get(o)
-  ### NOTE: I removed all filters because Phyloseq recommends keeping all low-count asvs
-  # Prevalence 
-  prevGrThan2 <- which(rowSums(temp>0) > 0) # Used to be 2; keeping 0 here
-  temp2 <- temp[prevGrThan2,]
-  # Turn counts of <5 to zero
-  lessThan5perSample <- temp2 <0 # Used to be 5, keeping 9 here
-  temp2[lessThan5perSample] <- 0
-  # How many have total reads less than 10?
-  temp2 <- temp2[rowSums(temp2)>0,colSums(temp2)>0]
-  assign(paste0(o,"2"), temp2)
+for (o in c("otu16m_mat_filt", "otu16n_mat_filt", "otu16ren_mat_filt",
+            "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")) {
+  
+  df <- get(o)  # Retrieve the actual dataframe from the string name
+  sample_counts <- colSums(df)
+  Q1 <- quantile(sample_counts, 0.25)
+  Q3 <- quantile(sample_counts, 0.75)
+  IQR_val <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR_val
+  outliers <- names(sample_counts[sample_counts < lower_bound])
+  
+  # Manual Thresholds
+  read_depth_thresh_20 <- 20
+  read_depth_thresh_50 <- 50
+  read_depth_thresh_500 <- 500
+  
+  # 24 dataframes will be made below
+  assign(paste0(o, "_20"),  df[, colnames(df)[which(colSums(df) >= read_depth_thresh_20)]])
+  assign(paste0(o, "_50"),  df[, colnames(df)[which(colSums(df) >= read_depth_thresh_50)]])
+  assign(paste0(o, "_500"), df[, colnames(df)[which(colSums(df) >= read_depth_thresh_500)]])
+  assign(paste0(o, "_outlier"), df[, colnames(df)[which(colSums(df) >= lower_bound)]])
 }
 
-# 16S
-# taxa not seen more than 2 times in at least 10% of the samples can be removed? 
-# Prevalence of OTUs
-for (o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
-  # Get current working file
-  temp <- get(o)# Plot histogram of total reads per sample (column sums)
+# # # # Step 3: # # # # 
+
+# Remove ESVs not seen more than 2 times in at least 10% or 20% of the samples 
+
+base_names <- c("otu16m_mat_filt", "otu1n_mat_filt", "otu16ren_mat_filt",
+                "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
+
+suffixes <- c("_20", "_50", "_500", "_outlier")
+all_names <- as.vector(outer(base_names, suffixes, paste0))
+
+for (name in all_names) {
+  cat("Processing:", name, "\n")
+  temp <- get(name)
+  
   sample_sums <- colSums(temp)
   df_plot <- data.frame(sample = names(sample_sums), reads = sample_sums)
   
-  # Remove counts 
   min_count <- 2
-  min_sample_fraction_10 <- 0.10
-  min_sample_fraction_20 <- 0.20
-  min_sample_count_10 <- ceiling(ncol(temp) * min_sample_fraction_10)  # of samples (cols) needed
+  min_sample_fraction_10 <- 0.10 # for 10% 
+  min_sample_fraction_20 <- 0.20 # for 20 % 
+  min_sample_count_10 <- ceiling(ncol(temp) * min_sample_fraction_10)  
   min_sample_count_20 <- ceiling(ncol(temp) * min_sample_fraction_20)
   
   p <- ggplot(df_plot, aes(x = reads)) +
@@ -822,7 +849,9 @@ for (o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
     theme_minimal() +
     labs(title = paste("OTU count distribution per sample -", o),
          x = "Total OTUs per sample", y = "Frequency")
+  
   print(p)
+  assign(paste0(name, "_otu_cnt"), p)
   
   presence_matrix <- temp > min_count
   samples_per_taxa <- rowSums(presence_matrix) # samples per taxa meet that criterion
@@ -832,119 +861,81 @@ for (o in c("otu16n_mat_filt", "otu16m_mat_filt", "otu16ren_mat_filt")) {
   dim(otu_filtered_20)
   
   # Print filtering summary 10 %
-  cat("Filtering", o, " 10% ", "\n")
+  cat("Filtering", name, " 10% ", "\n")
   cat("Original taxa:", nrow(temp), "\n")
   cat("Removed taxa with 10% thresh:", nrow(temp) - nrow(otu_filtered_10), "\n")
   cat("Remaining taxa:", nrow(otu_filtered_10), "\n\n")
   
   # Print filtering summary 20 %
-  cat("Filtering", o, " 20% ", "\n")
+  cat("Filtering", name, " 20% ", "\n")
   cat("Original taxa:", nrow(temp), "\n")
   cat("Removed taxa with 20% thresh:", nrow(temp) - nrow(otu_filtered_20), "\n")
   cat("Remaining taxa:", nrow(otu_filtered_20), "\n\n")
   
   # Optionally save the filtered matrix back with a new name
-  assign(paste0(o, "_count_thresh_10"), otu_filtered_10)
-  assign(paste0(o, "_count_thresh_20"), otu_filtered_10)
+  assign(paste0(name, "_count_thresh_10"), otu_filtered_10)
+  assign(paste0(name, "_count_thresh_20"), otu_filtered_20)
 }
 
-# 18S
-for ( o in c("otu18n_mat_filt", "otu18m_mat_filt", 
-             "otu18ren_mat_filt", "otu18n_nohost_mat_filt", 
-             "otu18m_nohost_mat_filt", "otu18ren_nohost_mat_filt")) {
-  # Get current working file
-  temp <- get(o)
-  ### NOTE: I removed all filters because Phyloseq recommends keeping all low-count asvs
-  # Prevalence of OTUs
-  prev18GrThan2 <- which(rowSums(temp>0) > 0) # Used to be 2, keeping 0 here
-  temp2 <- temp[prev18GrThan2,]
-  # Turn counts of <5 to zero
-  lessThan5perSampl18 <- temp2<0 # Used to be 5, keeping 0 here
-  temp2[lessThan5perSampl18] <- 0
-  # How many have total reads less than 10?
-  which(rowSums(temp2)<0) # None, but let's remove those anyway #10?
-  temp2 <- temp2[rowSums(temp2)>0,colSums(temp2)>0]
-  assign(paste0(o,"2"), temp2)
-}
+### Final loop 
 
-#### Looking at coverage depth to remove low-coverage samples ####
-hist(log10(colSums(otu16m_mat_filt2)), breaks = 100) # Handful of bad samples
-hist(log10(colSums(otu16n_mat_filt2)), breaks = 100) # Handful of bad samples
-hist(log10(colSums(otu16ren_mat_filt2)), breaks = 100) # Handful of bad samples
-hist(log10(colSums(otu18m_mat_filt2)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18n_mat_filt2)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18ren_mat_filt2)), breaks = 100) # For some reason, 18S distribution is very zero-skewed
-hist(log10(colSums(otu18m_nohost_mat_filt2)), breaks = 100) # 
-hist(log10(colSums(otu18n_nohost_mat_filt2)), breaks = 100) # 
-hist(log10(colSums(otu18ren_nohost_mat_filt2)), breaks = 100) # 
+# Reconstruct the name grid with base names and suffixes
+base_names <- c("otu16m_mat_filt", "otu16n_mat_filt", "otu16ren_mat_filt",
+                "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
+esv_list <- c(esv_16m_filt, esv_16n_filt, esv_16ren_filt,
+              esv_18m_nohost_filt, esv_18m_nohost_filt, esv_18ren_nohost_filt)
+suffixes <- c("_20", "_50", "_500", "_outlier")
+reads_list <- c(reads_16, reads_16ren, reads_18, reads_18ren)
 
+# Map each base_name to the correct reads_ object
+reads_lookup <- list(
+  "otu16m_mat_filt" = reads_16,
+  "otu16n_mat_filt" = reads_16, 
+  "otu16ren_mat_filt" = reads_16ren,
+  "otu18m_nohost_mat_filt" = reads_18, 
+  "otu18n_nohost_mat_filt" = reads_18,
+  "otu18ren_nohost_mat_filt" = reads_18ren)
 
-####  Look at decay curves for sample cutoff ####
-# Miseq
-plot(ecdf(x =colSums(otu16m_mat_filt) ))
-abline(v=4000)
-# Nanopore
-plot(ecdf(x =colSums(otu16n_mat_filt2) ))
-abline(v=17000)
-# Ren
-plot(ecdf(x =colSums(otu16ren_mat_filt2) ))
-abline(v=17000)
-# Make cutoff of 17000 for 16S nanopore and 4000 for miseq
-cutoff16Smiseq= 4000
-cutoff16Snano = 17000
+esv_list <- list(
+  otu16m_mat_filt = esv_16m_filt,
+  otu16n_mat_filt = esv_16n_filt,
+  otu16ren_mat_filt = esv_16ren_filt,
+  otu18m_nohost_mat_filt = esv_18m_nohost_filt,
+  otu18n_nohost_mat_filt = esv_18n_nohost_filt,
+  otu18ren_nohost_mat_filt = esv_18ren_nohost_filt)
 
+df_info <- expand.grid(
+  base = base_names,
+  suffix = suffixes,
+  stringsAsFactors = FALSE)
 
-# Look at decay curves for 18s
-plot(ecdf(x = log10(colSums(otu18m_mat_filt2) )))
-abline(v=log10(100))
-plot(ecdf(x = log10(colSums(otu18n_mat_filt2) )))
-abline(v=log10(100))
-plot(ecdf(x = log10(colSums(otu18ren_mat_filt2) )))
-abline(v=log10(100))
+# Add the threshold versions
+df_info$name_10 <- paste0(df_info$base, df_info$suffix) 
+df_info$name_20 <- paste0(df_info$base, df_info$suffix)
 
-# Are the two in miseq and nano the same ones?
-which(log10(colSums(otu18n_mat_filt2))<2)
-which(log10(colSums(otu18m_mat_filt2))<2)
+head(df_info)# Combine and add base_name info
 
-# Nope. Huh. Super sample dependent.
-colSums(otu18m_mat_filt2 [,names(which(log10(colSums(otu18n_mat_filt2))<2))])
+all_df_info <- rbind(
+  data.frame(name = df_info$name_10, base = df_info$base, threshold = 10),
+  data.frame(name = df_info$name_20, base = df_info$base, threshold = 20))
 
-# There doesn't seem to be a "good" cutoff for 18S? Very zero-skewed.
-# Are those random 2 bad samples the same as the 16S ones?
-meta_adj %>% 
-  filter(SampleId %in% colnames(otu16n_mat_filt2)[which(colSums(otu16n_mat_filt2)<cutoff16Snano)]) %>%
-  pull(SampleId)
-which(log10(colSums(otu18n_mat_filt2))<2)
-# No, those are completely different samples! Hm. Let's set a cutoff of 100 reads for 18S for now
-cutoff18S <- 100
-
-# Filter OTU tables
-# which(rownames(otu18n_nohost_mat_filt2) == "ESV_006911") # CHECK THEY ARE STILL GONE
-
-### Final filtering of samples ####
-# 16S
-for ( o in c("m","n","ren")) {
-  otumattemp <- get(paste0("otu16",o,"_mat_filt2"))
-  cat("\n-----", o, "-----\n")
-  cat("Initial number of samples (columns):", ncol(otumattemp), "\n")
-  cat("Initial number of ESVs (rows):", nrow(otumattemp), "\n")
-  cutoff <- ifelse(o %in% c("otu16m"), cutoff16Smiseq, cutoff16Snano)
+# Loop over each filtered name and use correct esv_list entry
+for (i in seq_len(nrow(all_df_info))) {
+  name <- all_df_info$name[i]
+  base_name <- all_df_info$base[i]
   
-  # Filter out samples
-  toKeepSamples <- colnames(otumattemp)[which(colSums(otumattemp)>=cutoff)]
-  otu_mat_final_temp <- otumattemp[, toKeepSamples]
-  cat("Number of samples retained:", length(toKeepSamples), "\n")
-  cat("Number of samples removed:", ncol(otumattemp) - length(toKeepSamples), "\n")
-  cat("Number of ESVs retained after sample filtering:", nrow(otu_mat_final_temp), "\n")
+  cat("Processing:", name, "\n")
+  df <- get(name)
+  toKeepSamples <- colnames(df)
+  meta_temp <- meta_adj_filt %>% filter(SampleId %in% toKeepSamples)
+  cat("Metadata entries retained:", name, ":", nrow(meta_temp), "\n")
   
-  # Filter out metadata to match OTU table
-  meta_temp <- meta_adj %>% filter(SampleId %in% toKeepSamples)
-  cat("Metadata entries retained:", nrow(meta_temp), "\n")
-  
-  # Get list of ESVs to keep
-  listESV_temp <- rownames(otu_mat_final_temp)
-  esv_filt_temp <- get(paste0("esv_16",o,"_filt"))
+  # Match ESV input using the base_name index
+  base_index <- which(base_names == base_name)
+  esv_filt_temp <- esv_list[[base_name]]
+
   cat("Initial taxonomy entries (ESV):", nrow(esv_filt_temp), "\n")
+  listESV_temp <- rownames(df)
   esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
   cat("Retained taxonomy entries (ESV):", nrow(esv_final_temp), "\n")
   cat("Taxonomy entries removed:", nrow(esv_filt_temp) - nrow(esv_final_temp), "\n")
@@ -958,122 +949,6 @@ for ( o in c("m","n","ren")) {
     select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
     column_to_rownames(var="ESVId") %>% as.matrix()
   
-  # Make phyloseq objects
-  phyloseq_temp <- phyloseq(otu_table(otu_mat_final_temp, taxa_are_rows=TRUE), tax_table(esv_phyloseq_temp), sample_data(meta_phyloseq_temp))
-  
-  #### Get sequences ####
-  seq_temp <- reads_16 %>%
-    filter(ESVId %in% rownames(otu_mat_final_temp)) %>%
-    select(ESVId, sequence)
-  cat("Number of sequences retained:", nrow(seq_temp), "\n")
-  #### Save items ####
-  #write_csv(meta_temp, paste0("01_process_and_clean_data/meta16",o,".csv"))
-  
-  # Make otu table into a df
-  otu_df_final <- otu_mat_final_temp  %>%
-    as.data.frame() %>% rownames_to_column(var="SampleId")
-  #write_csv(otu_df_final, paste0("01_process_and_clean_data/otu16",o,".csv"))
-  
-  # Save ESV info
-  #write_csv(esv_final_temp, paste0("01_process_and_clean_data/esv16",o,".csv"))
-  
-  ####### R versions #############
-  assign(paste0("meta16",o), value = meta_temp)
-  #save(list=paste0("meta16",o), file = paste0("01_process_and_clean_data/meta16",o,".rds"))
-  assign(paste0("otu16",o), value = otu_mat_final_temp)
-  #save(list=paste0("otu16",o), file = paste0("01_process_and_clean_data/otu16",o,".rds"))
-  assign(paste0("esv16",o), value = esv_final_temp)
-  #save(list=paste0("esv16",o), file = paste0("01_process_and_clean_data/esv16",o,".rds"))
-  assign(paste0("phyloseq16",o), value = phyloseq_temp)
-  #save(list=paste0("phyloseq16",o), file = paste0("01_process_and_clean_data/phyloseq16",o,".rds"))
-  assign(paste0("seq16",o), value = seq_temp)
-  #save(list=paste0("seq16",o), file = paste0("01_process_and_clean_data/seq16",o,".rds"))
-  
-}
-
-# for ( o in c("m","n","ren", "m_nohost","n_nohost","ren_nohost")) {
-#   
-#   cat("\n### Processing 18S:", o, "###\n")
-#   
-#   # Load OTU matrix
-#   otumattemp <- get(paste0("otu18",o,"_mat_filt2"))
-#   cat("Initial number of samples (columns):", ncol(otumattemp), "\n")
-#   cat("Initial number of ESVs (rows):", nrow(otumattemp), "\n")
-#   
-#   # Set cutoff
-#   cutoff <- cutoff18S
-#   
-#   # Filter samples
-#   toKeepSamples <- colnames(otumattemp)[which(colSums(otumattemp) >= cutoff)]
-#   cat("Number of samples retained:", length(toKeepSamples), "\n")
-#   cat("Number of samples removed:", ncol(otumattemp) - length(toKeepSamples), "\n")
-#   
-#   # Subset OTU table
-#   otu_mat_final_temp <- otumattemp[, toKeepSamples]
-#   cat("Number of ESVs retained after sample filtering:", nrow(otu_mat_final_temp), "\n")
-#   cat("Number of ESVs removed:", nrow(otumattemp) - nrow(otu_mat_final_temp), "\n")
-#   
-#   # Filter metadata
-#   meta_temp <- meta_adj %>% filter(SampleId %in% toKeepSamples)
-#   cat("Metadata entries retained:", nrow(meta_temp), "\n")
-#   
-#   # Get list of ESVs to keep
-#   listESV_temp <- rownames(otu_mat_final_temp)
-#   esv_filt_temp <- get(paste0("esv_18",o,"_filt"))
-#   cat("Initial taxonomy entries (ESVs):", nrow(esv_filt_temp), "\n")
-#   
-#   esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
-#   cat("Taxonomy entries retained:", nrow(esv_final_temp), "\n")
-#   cat("Taxonomy entries removed:", nrow(esv_filt_temp) - nrow(esv_final_temp), "\n")
-#   
-#   # Set up phyloseq objects
-#   meta_phyloseq_temp <- meta_temp %>% column_to_rownames("SampleId")
-#   
-#   esv_phyloseq_temp <- esv_final_temp %>%
-#     mutate(Species = ScientificName) %>%
-#     select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
-#     column_to_rownames(var = "ESVId") %>% as.matrix()
-#   
-#   # Make phyloseq object
-#   phyloseq_temp <- phyloseq(
-#     otu_table(otu_mat_final_temp, taxa_are_rows = TRUE),
-#     tax_table(esv_phyloseq_temp),
-#     sample_data(meta_phyloseq_temp)
-#   )
-#   
-#   #### Get sequences ####
-#   seq_temp <- reads_18 %>%
-#     filter(ESVId %in% rownames(otu_mat_final_temp)) %>%
-#     select(ESVId, sequence)
-#   cat("Number of sequences retained:", nrow(seq_temp), "\n")
-#   
-#   #### Save items (assign only) ####
-#   assign(paste0("meta18", o), value = meta_temp)
-#   assign(paste0("otu18", o), value = otu_mat_final_temp)
-#   assign(paste0("esv18", o), value = esv_final_temp)
-#   assign(paste0("phyloseq18", o), value = phyloseq_temp)
-#   assign(paste0("seq18", o), value = seq_temp)
-# }
-
-
-# 18S
-# "otu18m","otu18n","otu18ren","otu18m_nohost","otu18n_nohost","otu18ren_nohost"
-for ( o in c("m","n","ren", "m_nohost","n_nohost","ren_nohost")) {
-  otumattemp <- get(paste0("otu18",o,"_mat_filt2"))
-  cutoff <- cutoff18S
-  
-  # Filter out samples
-  toKeepSamples <- colnames(otumattemp)[which(colSums(otumattemp)>=cutoff)]
-  otu_mat_final_temp <- otumattemp[, toKeepSamples]
-  
-  # Filter out metadata to match OTU table
-  meta_temp <- meta_adj %>% filter(SampleId %in% toKeepSamples)
-  
-  # Get list of ESVs to keep
-  listESV_temp <- rownames(otu_mat_final_temp)
-  esv_filt_temp <- get(paste0("esv_18",o,"_filt"))
-  esv_final_temp <- esv_filt_temp %>% filter(ESVId %in% listESV_temp)
-  
   # Set up phyloseq objects
   meta_phyloseq_temp <- meta_temp %>%
     column_to_rownames("SampleId") 
@@ -1084,36 +959,40 @@ for ( o in c("m","n","ren", "m_nohost","n_nohost","ren_nohost")) {
     column_to_rownames(var="ESVId") %>% as.matrix()
   
   # Make phyloseq objects
-  phyloseq_temp <- phyloseq(otu_table(otu_mat_final_temp, taxa_are_rows=TRUE), tax_table(esv_phyloseq_temp), sample_data(meta_phyloseq_temp))
+  phyloseq_temp <- phyloseq(otu_table(df, taxa_are_rows=TRUE), 
+                            tax_table(esv_phyloseq_temp), 
+                            sample_data(meta_phyloseq_temp))
   
   #### Get sequences ####
-  seq_temp <- reads_18 %>%
-    filter(ESVId %in% rownames(otu_mat_final_temp)) %>%
+  reads_df <- reads_lookup[[base_name]]
+  seq_temp <- reads_df %>%
+    filter(ESVId %in% rownames(df)) %>%
     select(ESVId, sequence)
+  cat("Number of sequences retained:", nrow(seq_temp), "\n")
   
   #### Save items ####
-  #write_csv(meta_temp, paste0("01_process_and_clean_data/meta18",o,".csv"))
-
+  write_csv(meta_temp, paste0("01.1_qc_checks/meta_",name,".csv"))
+  
   # Make otu table into a df
-  otu_df_final <- otu_mat_final_temp  %>%
+  otu_df_final <- df  %>%
     as.data.frame() %>% rownames_to_column(var="SampleId")
-  #write_csv(otu_df_final, paste0("01_process_and_clean_data/otu18",o,".csv"))
-
+  write_csv(otu_df_final, paste0("01.1_qc_checks/otu_",name,".csv"))
+  
   # Save ESV info
-  #write_csv(esv_final_temp, paste0("01_process_and_clean_data/esv18",o,".csv"))
+  write_csv(esv_final_temp, paste0("01.1_qc_checks/esv_", name,".csv"))
   
   ####### R versions #############
-  assign(paste0("meta18",o), value = meta_temp)
-  #save(list=paste0("meta18",o), file = paste0("01_process_and_clean_data/meta18",o,".rds"))
-  assign(paste0("otu18",o), value = otu_mat_final_temp)
-  #save(list=paste0("otu18",o), file = paste0("01_process_and_clean_data/otu18",o,".rds"))
-  assign(paste0("esv18",o), value = esv_final_temp)
-  #save(list=paste0("esv18",o), file = paste0("01_process_and_clean_data/esv18",o,".rds"))
-  assign(paste0("phyloseq18",o), value = phyloseq_temp)
-  #save(list=paste0("phyloseq18",o), file = paste0("01_process_and_clean_data/phyloseq18",o,".rds"))
-  assign(paste0("seq18",o), value = seq_temp)
-  #save(list=paste0("seq18",o), file = paste0("01_process_and_clean_data/seq18",o,".rds"))
-
+  assign(paste0("meta_", name), value = meta_temp)
+  save(list=paste0("meta_",name), file = paste0("01.1_qc_checks/meta_",name,".rds"))
+  assign(paste0("otu_",name), value = df)
+  save(list=paste0("otu_",name), file = paste0("01.1_qc_checks/otu_",name,".rds"))
+  assign(paste0("esv_",name), value = esv_final_temp)
+  save(list=paste0("esv_",name), file = paste0("01.1_qc_checks/esv_",name,".rds"))
+  assign(paste0("phyloseq_",name), value = phyloseq_temp)
+  save(list=paste0("phyloseq_",name), file = paste0("01.1_qc_checks/phyloseq_",name,".rds"))
+  assign(paste0("seq_", name), value = seq_temp)
+  save(list=paste0("seq_", name), file = paste0("01.1_qc_checks/seq_",name,".rds"))
+  
 }
 
 ###### Make lists of eukaryotic classes, which we can partition into different types #######
