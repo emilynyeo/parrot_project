@@ -40,8 +40,13 @@ for ( o in c("nano","miseq")) {
   newsampdata <- sample_data(phyloseq18) %>%
     data.frame() %>%
     mutate(Captive.Wild.probiotic = ifelse(Captive.Wild == "Wild, seized from traffickers",
-                                           ifelse(Given.probiotic == "Given probiotics", "Wild, seized from traffickers\nGiven probiotics", as.character(Captive.Wild)), as.character(Captive.Wild))) %>%
-    mutate(Captive.Wild.probiotic = factor(Captive.Wild.probiotic, levels=c("Captive","Wild, free ranging", "Wild, seized from traffickers","Wild, seized from traffickers\nGiven probiotics","Crate 1: Unknown origin", "Crate 2: Unknown origin")))
+                                           ifelse(Given.probiotic == "Given probiotics", 
+                                                  "Wild, seized from traffickers\nGiven probiotics", 
+                                                  as.character(Captive.Wild)), as.character(Captive.Wild))) %>%
+    mutate(Captive.Wild.probiotic = factor(Captive.Wild.probiotic, 
+                                           levels=c("Captive","Wild, free ranging", "Wild, seized from traffickers",
+                                                    "Wild, seized from traffickers\nGiven probiotics",
+                                                    "Crate 1: Unknown origin", "Crate 2: Unknown origin")))
   sample_data(phyloseq18) <- sample_data(newsampdata)
   
   ###

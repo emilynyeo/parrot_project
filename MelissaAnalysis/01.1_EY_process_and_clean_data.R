@@ -924,6 +924,10 @@ for (i in seq_len(nrow(all_df_info))) {
   name <- all_df_info$name[i]
   base_name <- all_df_info$base[i]
   
+  suffix <- sub(base_name, "", name, fixed = TRUE)  # extract suffix from the name
+  threshold <- all_df_info$threshold[i]
+  output_name <- paste0(base_name, suffix, "_thr", threshold)
+  
   cat("Processing:", name, "\n")
   df <- get(name)
   toKeepSamples <- colnames(df)
@@ -971,27 +975,45 @@ for (i in seq_len(nrow(all_df_info))) {
   cat("Number of sequences retained:", nrow(seq_temp), "\n")
   
   #### Save items ####
-  write_csv(meta_temp, paste0("01.1_qc_checks/meta_",name,".csv"))
+  #write_csv(meta_temp, paste0("01.1_qc_checks/meta_",name,".csv"))
+  write_csv(meta_temp, paste0("01.1_qc_checks/meta_", output_name, ".csv"))
   
   # Make otu table into a df
   otu_df_final <- df  %>%
     as.data.frame() %>% rownames_to_column(var="SampleId")
-  write_csv(otu_df_final, paste0("01.1_qc_checks/otu_",name,".csv"))
+  #write_csv(otu_df_final, paste0("01.1_qc_checks/otu_",name,".csv"))
+  write_csv(otu_df_final, paste0("01.1_qc_checks/otu_", output_name, ".csv"))
   
   # Save ESV info
-  write_csv(esv_final_temp, paste0("01.1_qc_checks/esv_", name,".csv"))
+  #write_csv(esv_final_temp, paste0("01.1_qc_checks/esv_", name,".csv"))
+  write_csv(esv_final_temp, paste0("01.1_qc_checks/esv_", output_name, ".csv"))
   
   ####### R versions #############
-  assign(paste0("meta_", name), value = meta_temp)
-  save(list=paste0("meta_",name), file = paste0("01.1_qc_checks/meta_",name,".rds"))
-  assign(paste0("otu_",name), value = df)
-  save(list=paste0("otu_",name), file = paste0("01.1_qc_checks/otu_",name,".rds"))
-  assign(paste0("esv_",name), value = esv_final_temp)
-  save(list=paste0("esv_",name), file = paste0("01.1_qc_checks/esv_",name,".rds"))
-  assign(paste0("phyloseq_",name), value = phyloseq_temp)
-  save(list=paste0("phyloseq_",name), file = paste0("01.1_qc_checks/phyloseq_",name,".rds"))
-  assign(paste0("seq_", name), value = seq_temp)
-  save(list=paste0("seq_", name), file = paste0("01.1_qc_checks/seq_",name,".rds"))
+  assign(paste0("meta_", output_name), value = meta_temp)
+  save(list = paste0("meta_", output_name), file = paste0("01.1_qc_checks/meta_", output_name, ".rds"))
+  
+  assign(paste0("otu_", output_name), value = df)
+  save(list = paste0("otu_", output_name), file = paste0("01.1_qc_checks/otu_", output_name, ".rds"))
+  
+  assign(paste0("esv_", output_name), value = esv_final_temp)
+  save(list = paste0("esv_", output_name), file = paste0("01.1_qc_checks/esv_", output_name, ".rds"))
+  
+  assign(paste0("phyloseq_", output_name), value = phyloseq_temp)
+  save(list = paste0("phyloseq_", output_name), file = paste0("01.1_qc_checks/phyloseq_", output_name, ".rds"))
+  
+  assign(paste0("seq_", output_name), value = seq_temp)
+  save(list = paste0("seq_", output_name), file = paste0("01.1_qc_checks/seq_", output_name, ".rds"))
+  
+  #assign(paste0("meta_", name), value = meta_temp)
+  #save(list=paste0("meta_",name), file = paste0("01.1_qc_checks/meta_",name,".rds"))
+  #assign(paste0("otu_",name), value = df)
+  #save(list=paste0("otu_",name), file = paste0("01.1_qc_checks/otu_",name,".rds"))
+  #assign(paste0("esv_",name), value = esv_final_temp)
+  #save(list=paste0("esv_",name), file = paste0("01.1_qc_checks/esv_",name,".rds"))
+  #assign(paste0("phyloseq_",name), value = phyloseq_temp)
+  #save(list=paste0("phyloseq_",name), file = paste0("01.1_qc_checks/phyloseq_",name,".rds"))
+  #assign(paste0("seq_", name), value = seq_temp)
+  #save(list=paste0("seq_", name), file = paste0("01.1_qc_checks/seq_",name,".rds"))
   
 }
 
