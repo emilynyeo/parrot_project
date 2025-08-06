@@ -821,7 +821,7 @@ for (o in c("otu16m_mat_filt", "otu16n_mat_filt", "otu16ren_mat_filt",
 
 # # # # Step 3: # # # # 
 
-# Remove ESVs not seen more than 2 times in at least 10% or 20% of the samples 
+# Remove ESVs not seen more than 2 times in at least 10% or 30% of the samples 
 
 base_names <- c("otu16m_mat_filt", "otu1n_mat_filt", "otu16ren_mat_filt",
                 "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
@@ -838,14 +838,14 @@ for (name in all_names) {
   
   min_count <- 2
   min_sample_fraction_10 <- 0.10 # for 10% 
-  min_sample_fraction_20 <- 0.20 # for 20 % 
+  min_sample_fraction_20 <- 0.30 # for 30 % 
   min_sample_count_10 <- ceiling(ncol(temp) * min_sample_fraction_10)  
-  min_sample_count_20 <- ceiling(ncol(temp) * min_sample_fraction_20)
+  min_sample_count_30 <- ceiling(ncol(temp) * min_sample_fraction_30)
   
   p <- ggplot(df_plot, aes(x = reads)) +
     geom_histogram(binwidth = 1000, fill = "steelblue", color = "black") +
     geom_vline(xintercept = min_sample_count_10, linetype = "dashed", color = "red") +
-    geom_vline(xintercept = min_sample_count_20, linetype = "dashed", color = "purple") +
+    geom_vline(xintercept = min_sample_count_30, linetype = "dashed", color = "purple") +
     theme_minimal() +
     labs(title = paste("OTU count distribution per sample -", o),
          x = "Total OTUs per sample", y = "Frequency")
@@ -856,9 +856,9 @@ for (name in all_names) {
   presence_matrix <- temp > min_count
   samples_per_taxa <- rowSums(presence_matrix) # samples per taxa meet that criterion
   otu_filtered_10 <- temp[samples_per_taxa >= min_sample_count_10, ]  # Keep taxa meeting threshold
-  otu_filtered_20 <- temp[samples_per_taxa >= min_sample_count_20, ]
+  otu_filtered_30 <- temp[samples_per_taxa >= min_sample_count_30, ]
   dim(otu_filtered_10)
-  dim(otu_filtered_20)
+  dim(otu_filtered_30)
   
   # Print filtering summary 10 %
   cat("Filtering", name, " 10% ", "\n")
@@ -866,15 +866,15 @@ for (name in all_names) {
   cat("Removed taxa with 10% thresh:", nrow(temp) - nrow(otu_filtered_10), "\n")
   cat("Remaining taxa:", nrow(otu_filtered_10), "\n\n")
   
-  # Print filtering summary 20 %
-  cat("Filtering", name, " 20% ", "\n")
+  # Print filtering summary 30 %
+  cat("Filtering", name, " 30% ", "\n")
   cat("Original taxa:", nrow(temp), "\n")
-  cat("Removed taxa with 20% thresh:", nrow(temp) - nrow(otu_filtered_20), "\n")
-  cat("Remaining taxa:", nrow(otu_filtered_20), "\n\n")
+  cat("Removed taxa with 30% thresh:", nrow(temp) - nrow(otu_filtered_30), "\n")
+  cat("Remaining taxa:", nrow(otu_filtered_30), "\n\n")
   
   # Optionally save the filtered matrix back with a new name
   assign(paste0(name, "_count_thresh_10"), otu_filtered_10)
-  assign(paste0(name, "_count_thresh_20"), otu_filtered_20)
+  assign(paste0(name, "_count_thresh_30"), otu_filtered_30)
 }
 
 ### Final loop 
@@ -911,13 +911,13 @@ df_info <- expand.grid(
 
 # Add the threshold versions
 df_info$name_10 <- paste0(df_info$base, df_info$suffix) 
-df_info$name_20 <- paste0(df_info$base, df_info$suffix)
+df_info$name_30 <- paste0(df_info$base, df_info$suffix)
 
 head(df_info)# Combine and add base_name info
 
 all_df_info <- rbind(
   data.frame(name = df_info$name_10, base = df_info$base, threshold = 10),
-  data.frame(name = df_info$name_20, base = df_info$base, threshold = 20))
+  data.frame(name = df_info$name_30, base = df_info$base, threshold = 30))
 
 # Loop over each filtered name and use correct esv_list entry
 for (i in seq_len(nrow(all_df_info))) {

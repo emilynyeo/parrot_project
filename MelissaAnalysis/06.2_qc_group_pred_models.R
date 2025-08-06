@@ -120,6 +120,7 @@ run_microbiome_model <- function(physeq_obj,
 
 
 # Step 1: Load all phyloseq RDS files
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 phyloseq_files <- list.files("01.1_qc_checks", pattern = "^phyloseq_.*\\.rds$", full.names = TRUE)
 
 file_df <- data.frame(
@@ -187,32 +188,6 @@ for (sfx in suffixes_thresholds) {
       }
       
       clean_id <- paste0(group_name, "_", sfx)
-      
-#for (sfx in suffixes_thresholds) {
-#  for (group_name in names(merge_groups)) {
-#    base_parts <- merge_groups[[group_name]]
-    
-    # Get matching files
-#    matching_paths <- file_df %>%
-#      filter(base %in% base_parts, suffix_thresh == sfx) %>%
-#      arrange(base)  # consistent order
-    
-#    if (nrow(matching_paths) < 2) {
-#      message("Skipping ", group_name, "_", sfx, " (not all parts found)")
-#      next
-#    }
-    
-    # Load and merge
-#    phylo_objs <- lapply(matching_paths$path, function(path) {
-#      env <- new.env()
-#      obj_name <- load(path, envir = env)
-#      env[[obj_name]]
-#    })
-    
-#    ps_merged <- do.call(merge_phyloseq, phylo_objs)
-    
-    # Clean up group label
-#    clean_id <- paste0(group_name, "_", sfx)
     
     # ** Combine Crate Data into one **
     sample_df <- as.data.frame(sample_data(ps_merged))
@@ -253,13 +228,6 @@ for (sfx in suffixes_thresholds) {
       method = "rf",
       p = 0.75, seed = 241, cv_folds = 4,
       plot_results = TRUE)
-    
-    #results_pcaNNet <- run_microbiome_model(
-    #  physeq_obj = phyloseq_no_new_crates,
-    #  group_var = "cap_wild_crate",
-    #  method = "pcaNNet",
-    #  p = 0.75, seed = 241, cv_folds = 4,
-    #  plot_results = TRUE)
     
     results_xgbTree <- run_microbiome_model(
       physeq_obj = phyloseq_no_new_crates,
@@ -318,6 +286,14 @@ for (sfx in suffixes_thresholds) {
     ggsave(filename = paste0("06.2_qc_group_pred_models/compare_models_no_crates", clean_id,".png"),
            mod_results_compare, height=15, width=18)
     
+    m16_all_plot <- ggplot(m16_all, aes(x = ID, y = `Balanced Accuracy`, fill = Class)) +
+      geom_col(position = "dodge") +
+      scale_fill_manual(values = cal_palette("superbloom3")) +
+      facet_wrap(~ Model, scales = "free_x") +
+      theme_minimal(base_size = 14) +
+      labs(title = "Balanced Accuracy Comparison for 16m",
+           y = "Balanced Accuracy", x = "Processing Type") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
     # Save models
     save(results_rf, results_pcaNNet, results_xgbTree,
@@ -372,15 +348,6 @@ model_files <- list.files("06.2_qc_group_pred_models",
                           pattern = "^models_rf_pcannet_xgbtree.*\\.RData$", 
                           full.names = TRUE)
 
-extract_metrics <- function(model_result, model_name, id) {
-  metrics <- model_result$confusion_matrix$byClass[, c("Sensitivity", "Specificity", "Balanced Accuracy")]
-  metrics_df <- as.data.frame(metrics)
-  metrics_df$Class <- rownames(metrics_df)
-  metrics_df$Model <- model_name
-  metrics_df$ID <- id
-  return(metrics_df)
-}
-  
 all_metrics_list <- list()
 for (file in model_files) {
     # Extract clean_id from filename
@@ -412,12 +379,19 @@ all_metrics_df <- bind_rows(all_metrics_list)
 
 all_metrics_df <- all_metrics_df %>% 
   mutate(ID = str_replace_all(ID, "_", " "),              #underscores to spaces
-         #ID = str_replace(ID, "(.* )", "r\\1"),           #add "r" before last group
          ID = str_replace(ID, "thr", "p")) 
 
+write.csv(all_metrics_df,
+          file = paste0("06.2_qc_group_pred_models/all_metrics_df.csv"),
+          row.names = FALSE)
+
 balanced_df <- all_metrics_df %>%
-  select(ID, Model, Class, `Balanced Accuracy`) %>% 
+  select(ID, Model, Class, `Balanced Accuracy`, Sensitivity, Specificity) %>% 
   filter(Model != "pcaNNet")
+
+write.csv(balanced_df,
+          file = paste0("06.2_qc_group_pred_models/metrics_df_no_pca.csv"),
+          row.names = FALSE)
 
 all_plot <- ggplot(balanced_df, aes(x = ID, y = `Balanced Accuracy`, fill = Class)) +
   geom_col(position = "dodge") +
@@ -431,3 +405,167 @@ all_plot <- ggplot(balanced_df, aes(x = ID, y = `Balanced Accuracy`, fill = Clas
 ggsave(filename = paste0("06.2_qc_group_pred_models/compare_RF_XGBTREE_models_no_crates.png"),
        all_plot, height=15, width=18)
 
+# Now faceting plots by RF, xgbTREE, 16, 18, m and n
+
+RF_only_all <- balanced_df %>% filter(Model == "Random Forest")
+xgbTree_only_all <- balanced_df %>% filter(Model == "xgbTree")
+
+m16_all <- balanced_df %>% filter(grepl("^phyloseq16m(\\s|$)", ID))
+m18_all <- balanced_df %>% filter(grepl("^phyloseq18m(\\s|$)", ID))
+n16_all <- balanced_df %>% filter(grepl("^phyloseq16n(\\s|$)", ID))
+n18_all <- balanced_df %>% filter(grepl("^phyloseq18n(\\s|$)", ID))
+
+m16_all_RF <- RF_only_all %>% filter(grepl("^phyloseq16m(\\s|$)", ID))
+m18_all_RF <- RF_only_all %>% filter(grepl("^phyloseq18m(\\s|$)", ID))
+n16_all_RF <- RF_only_all %>% filter(grepl("^phyloseq16n(\\s|$)", ID))
+n18_all_RF <- RF_only_all %>% filter(grepl("^phyloseq18n(\\s|$)", ID))
+
+m16_all_xgbTree <- xgbTree_only_all %>% filter(grepl("^phyloseq16m(\\s|$)", ID))
+m18_all_xgbTree  <- xgbTree_only_all %>% filter(grepl("^phyloseq18m(\\s|$)", ID))
+n16_all_xgbTree  <- xgbTree_only_all %>% filter(grepl("^phyloseq16n(\\s|$)", ID))
+n18_all_xgbTree  <- xgbTree_only_all %>% filter(grepl("^phyloseq18n(\\s|$)", ID))
+
+# Reusable plotting function
+plot_balanced_accuracy <- function(df, title) {
+  ggplot(df, aes(x = reorder(ID, -`Balanced Accuracy`), y = `Balanced Accuracy`, fill = Class)) +
+    geom_col(position = "dodge") +
+    scale_fill_manual(values = cal_palette("superbloom3")) +
+    facet_wrap(~ Model, scales = "free_x") +
+    coord_cartesian(ylim = c(0.8, 1)) +
+    theme_minimal(base_size = 14) +
+    labs(title = title, y = "Balanced Accuracy", x = "Processing Type") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Create plots
+p1 <- plot_balanced_accuracy(m16_all, "Balanced Accuracy: 16m")
+p2 <- plot_balanced_accuracy(m18_all, "Balanced Accuracy: 18m")
+p3 <- plot_balanced_accuracy(n16_all, "Balanced Accuracy: 16n")
+p4 <- plot_balanced_accuracy(n18_all, "Balanced Accuracy: 18n")
+
+p1_RF <- plot_balanced_accuracy(m16_all_RF, "RF Balanced Accuracy: 16m")
+p2_RF <- plot_balanced_accuracy(m18_all_RF, "RF Balanced Accuracy: 18m")
+p3_RF <- plot_balanced_accuracy(n16_all_RF, "RF Balanced Accuracy: 16n")
+p4_RF <- plot_balanced_accuracy(n18_all_RF, "RF Balanced Accuracy: 18n")
+
+p1_xgbTree <- plot_balanced_accuracy(m16_all_xgbTree, "xgbTree Balanced Accuracy: 16m")
+p2_xgbTree  <- plot_balanced_accuracy(m18_all_xgbTree, "xgbTree Balanced Accuracy: 18m")
+p3_xgbTree  <- plot_balanced_accuracy(n16_all_xgbTree, "xgbTree Balanced Accuracy: 16n")
+p4_xgbTree  <- plot_balanced_accuracy(n18_all_xgbTree, "xgbTree Balanced Accuracy: 18n")
+
+# Arrange in 2x2 grid
+bal_accuracy <- (p1 | p2) / (p3 | p4)
+bal_accuracy_RF <- (p1_RF | p2_RF) / (p3_RF | p4_RF)
+bal_accuracy_xgbTree <- (p1_xgbTree | p2_xgbTree) / (p3_xgbTree | p4_xgbTree)
+ggsave(filename = paste0("06.2_qc_group_pred_models/balanced_accuracy.png"), bal_accuracy, height=15, width=18)
+ggsave(filename = paste0("06.2_qc_group_pred_models/RF_balanced_accuracy.png"), bal_accuracy_RF, height=15, width=18)
+ggsave(filename = paste0("06.2_qc_group_pred_models/xgbTree_balanced_accuracy.png"), bal_accuracy_xgbTree, height=15, width=18)
+
+# What about overall accuracy? 
+
+class_anova_result <- aov(`Balanced Accuracy` ~ Class, data = balanced_df)
+class_anova_result_interaction <- aov(`Balanced Accuracy` ~ Class * Model, data = balanced_df)
+summary(class_anova_result)
+TukeyHSD(class_anova_result)
+summary(class_anova_result_interaction)
+TukeyHSD(class_anova_result_interaction)
+
+id_anova_result <- aov(`Balanced Accuracy` ~ ID, data = balanced_df)
+id_anova_result_interaction <- aov(`Balanced Accuracy` ~ ID * Model, data = balanced_df)
+summary(id_anova_result)
+id_T <- TukeyHSD(id_anova_result)
+summary(id_anova_result_interaction)
+id_T_int <- TukeyHSD(id_anova_result_interaction)
+
+# Convert TukeyHSD output to tidy format
+
+summarize_significant_tukey <- function(tukey_result, 
+                                        output_name = NULL, 
+                                        p_cutoff = 0.05, 
+                                        show_gt = TRUE) {
+  library(dplyr)
+  library(tibble)
+  library(purrr)
+  library(gt)
+  result_df <- bind_rows(
+    map(names(tukey_result), function(term) {
+      as_tibble(tukey_result[[term]], rownames = "comparison") %>%
+        mutate(term = term)
+    })) %>%
+    filter(`p adj` < p_cutoff) %>%
+    mutate(comparison = gsub("-", " & ", comparison),  # Replace dash with ampersand
+      effect_direction = case_when(
+        diff > 0 ~ "First group higher",
+        diff < 0 ~ "Second group higher",
+        TRUE ~ "No difference"),
+      interpretation = paste0("Sig. diff. between: ",
+        comparison, " in ", term, " (", round(diff, 3),
+        " diff). ", effect_direction, ".")) %>%
+    relocate(term, comparison, diff, `p adj`, interpretation)
+  if (!is.null(output_name)) {
+    assign(output_name, result_df, envir = .GlobalEnv)
+  }
+  # Optionally display as gt table
+  if (show_gt) {
+    return(result_df %>%
+        select(term, `p adj`, interpretation) %>%
+        gt() %>%
+        tab_header(title = "Significant Tukey HSD Results",
+          subtitle = paste0("Adjusted p-value < ", p_cutoff)) %>%
+        fmt_number(columns = vars(`p adj`), decimals = 3))
+  } else {
+    return(result_df)
+  }
+}
+
+# Use function
+signif_id_T <- summarize_significant_tukey(id_T, output_name = "signif_id_T")
+signif_id_T_int <- summarize_significant_tukey(id_T_int, output_name = "signif_id_T_int")
+
+###
+
+# func for overall
+plot_overall_balanced_accuracy <- function(df, title) {
+  overall_df <- df %>%
+    group_by(ID, Model) %>%
+    summarise(Mean_Balanced_Accuracy = mean(`Balanced Accuracy`, na.rm = TRUE), .groups = "drop") %>%
+    mutate(ID_Model = paste(Model, ID, sep = " | ")) %>%
+    arrange(Model, desc(Mean_Balanced_Accuracy)) %>%
+    mutate(ID_Model = factor(ID_Model, levels = unique(ID_Model)))
+  
+  ggplot(overall_df, aes(x = reorder(ID_Model, -Mean_Balanced_Accuracy), 
+                         y = Mean_Balanced_Accuracy, fill = Model)) +
+    geom_col() +
+    coord_cartesian(ylim = c(0.85, 1)) +
+    facet_wrap(~ Model, scales = "free_x", strip.position = "top") +
+    theme_minimal(base_size = 14) +
+    labs(title = title, y = "Overall Balanced Accuracy", x = "Processing Type") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.placement = "outside") +
+    scale_fill_manual(values = cal_palette("superbloom3"))
+}
+
+# Create overall plots
+p5 <- plot_overall_balanced_accuracy(m16_all, "Overall Balanced Accuracy: 16m")
+p6 <- plot_overall_balanced_accuracy(m18_all, "Overall Balanced Accuracy: 18m")
+p7 <- plot_overall_balanced_accuracy(n16_all, "Overall Balanced Accuracy: 16n")
+p8 <- plot_overall_balanced_accuracy(n18_all, "Overall Balanced Accuracy: 18n")
+
+p5_RF <- plot_overall_balanced_accuracy(m16_all_RF, "RF Overall Balanced Accuracy: 16m")
+p6_RF <- plot_overall_balanced_accuracy(m18_all_RF, "RF Overall Balanced Accuracy: 18m")
+p7_RF <- plot_overall_balanced_accuracy(n16_all_RF, "RF Overall Balanced Accuracy: 16n")
+p8_RF <- plot_overall_balanced_accuracy(n18_all_RF, "RF Overall Balanced Accuracy: 18n")
+
+p5_xgbTree <- plot_overall_balanced_accuracy(m16_all_xgbTree, "xgbTree Overall Balanced Accuracy: 16m")
+p6_xgbTree <- plot_overall_balanced_accuracy(m18_all_xgbTree, "xgbTree Overall Balanced Accuracy: 18m")
+p7_xgbTree <- plot_overall_balanced_accuracy(n16_all_xgbTree, "xgbTree Overall Balanced Accuracy: 16n")
+p8_xgbTree <- plot_overall_balanced_accuracy(n18_all_xgbTree, "xgbTree Overall Balanced Accuracy: 18n")
+
+# Arrange in 2x2 grid
+overall_bal_accuracy <- (p5 | p6) / (p7 | p8)
+overall_bal_accuracy_RF <- (p5_RF | p6_RF) / (p7_RF | p8_RF)
+overall_bal_accuracy_xgbTree <- (p5_xgbTree | p6_xgbTree) / (p7_xgbTree | p8_xgbTree)
+
+ggsave(filename = paste0("06.2_qc_group_pred_models/overall_bal_accuracy.png"), overall_bal_accuracy, height=15, width=18)
+ggsave(filename = paste0("06.2_qc_group_pred_models/RF_overall_bal_accuracy.png"), overall_bal_accuracy_RF, height=15, width=18)
+ggsave(filename = paste0("06.2_qc_group_pred_models/xgbTree_overall_bal_accuracy.png"), overall_bal_accuracy_xgbTree, height=15, width=18)
