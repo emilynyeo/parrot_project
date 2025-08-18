@@ -4,25 +4,27 @@
 pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
                MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
                UpSetR, gridExtra, grid, WGCNA)
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 #BiocManager::install(c("GO.db", "impute", "preprocessCore"))
                
 #### Load data ####
 # Also converting to matrices with rownames for phyloseq
+load("01_process_and_clean_data/phyloseq16m.rds")
 load("01_process_and_clean_data/phyloseq16n.rds")
-load("01_process_and_clean_data/phyloseq16ren.rds")
+#load("01_process_and_clean_data/phyloseq16ren.rds")
 
-load("01_process_and_clean_data/phyloseq18n.rds")
-load("01_process_and_clean_data/phyloseq18ren_nohost.rds")
-load("01_process_and_clean_data/phyloseq18m.rds")
+#load("01_process_and_clean_data/phyloseq18m.rds")
+#load("01_process_and_clean_data/phyloseq18n.rds")
+#load("01_process_and_clean_data/phyloseq18ren_nohost.rds")
 
 # Split into classes phylo
 load("02_split_18_classes/phyloseq18nano_nohost.rds")
-load("02_split_18_classes/phyloseq18nano_plants.rds")
-load("02_split_18_classes/phyloseq18nano_microeuk.rds")
+#load("02_split_18_classes/phyloseq18nano_plants.rds")
+#load("02_split_18_classes/phyloseq18nano_microeuk.rds")
 
 load("02_split_18_classes/phyloseq18miseq_nohost.rds")
-load("02_split_18_classes/phyloseq18miseq_plants.rds")
-load("02_split_18_classes/phyloseq18miseq_microeuk.rds")
+#load("02_split_18_classes/phyloseq18miseq_plants.rds")
+#load("02_split_18_classes/phyloseq18miseq_microeuk.rds")
 
 # ** Merge phyloseq objects **
 phyloseq16all <- merge_phyloseq(phyloseq16n, phyloseq16ren)
@@ -30,81 +32,159 @@ phyloseq18all <- phyloseq18nano_nohost
 phyloseq18all <- prune_samples(sample_sums(phyloseq18all) >0, phyloseq18all)
 phyloseq18miseq_nohost <- prune_samples(sample_sums(phyloseq18miseq_nohost) >0, phyloseq18miseq_nohost)
 
-# ** Combine Crate Data into one **
-sample_df <- as.data.frame(sample_data(phyloseq16all))
+phyloseq_list <- list(
+  #phyloseq16m = phyloseq16m,
+  #phyloseq16n = phyloseq16n,
+  phyloseq18nano_nohost = phyloseq18nano_nohost)
+  #phyloseq18miseq_nohost = phyloseq18miseq_nohost)
 
-# Create new variable with recoded values
-sample_df$cap_wild_crate <- as.character(sample_df$Captive.Wild)
-sample_df$cap_wild_crate[sample_df$Captive.Wild %in% c("Crate 1: Unknown origin", 
-                                                       "Crate 2: Unknown origin")] <- "New crates"
-# factor with levels
-sample_df$cap_wild_crate <- factor(sample_df$cap_wild_crate,
-                                   levels = c("Captive", 
-                                              "Wild, free ranging", 
-                                              "Wild, seized from traffickers", 
-                                              "New crates"))
-# Replace with updated data
-sample_data(phyloseq16all) <- sample_data(sample_df)
-levels(sample_data(phyloseq16all)$cap_wild_crate)
+anc_results <- list()
+anc_results_18n <- list()
 
-#### ANCOM-BC2 for all 16s nano data ####
-?ancombc2
+for (name in names(phyloseq_list)) {
+  cat("Processing:", name, "\n")
+  phy <- phyloseq_list[[name]]
+  
+  # Example: Get sample count
+  print(nsamples(phy))
+  
+  # ANCOMBC Genus
+  cat("Running family level ANCOMBC2 on: ", name, "\n")
+  anc_family <-  ancombc2(data = phy, tax_level = "Family",
+                         fix_formula = "Captive.Wild", rand_formula = NULL,
+                         p_adj_method = "holm", pseudo_sens = TRUE,
+                         prv_cut = 0.1, lib_cut = 50, s0_perc = 0.05,
+                         group = "Captive.Wild", struc_zero = TRUE, neg_lb = TRUE)
+  
+  cat("Running genus level ANCOMBC2 on: ", name, "\n")
+  anc_genus <-  ancombc2(data = phy, tax_level = "Genus",
+                         fix_formula = "Captive", rand_formula = NULL,
+                         p_adj_method = "holm", pseudo_sens = TRUE,
+                         prv_cut = 0.001, lib_cut = 50, s0_perc = 0.05,
+                         group = "Captive", struc_zero = TRUE, neg_lb = TRUE)
+  
+  cat("Running species level ANCOMBC2 on: ", name, "\n")
+  anc_species <-  ancombc2(data = phy, tax_level = "Species",
+                         fix_formula = "Captive", rand_formula = NULL,
+                         p_adj_method = "holm", pseudo_sens = TRUE,
+                         prv_cut = 0.1, lib_cut = 50, s0_perc = 0.05,
+                         group = "Captive", struc_zero = TRUE, neg_lb = TRUE)
+  
+  anc_results_18n[[name]] <- list(
+    family = anc_family,
+    genus = anc_genus,
+    species = anc_species)
+}
+save(anc_results_18n, 
+     file = "05_taxa_driving_groups/ancom_18n.RData")
 
-#set.seed(123)
-# p16n_all_anc <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
-#                   fix_formula = "Captive.Wild", rand_formula = NULL,
-#                   p_adj_method = "holm", pseudo_sens = TRUE,
-#                   prv_cut = 0, lib_cut = 1000, s0_perc = 0.05,
-#                   group = "Captive.Wild", struc_zero = TRUE, neg_lb = TRUE)
+save(anc_results, 
+     file = "05_taxa_driving_groups/ancom_16m_16n_18m.RData")
 
-p16n_all_anc_1crate <-  ancombc2(data = phyloseq16all, tax_level = "Genus",
-                          fix_formula = "cap_wild_crate", rand_formula = NULL,
-                          p_adj_method = "holm", pseudo_sens = TRUE,
-                          prv_cut = 0, lib_cut = 1000, s0_perc = 0.05,
-                          group = "cap_wild_crate", struc_zero = TRUE, neg_lb = TRUE)
+load("05_taxa_driving_groups/ancom_16m_16n_18m.RData")
 
-# save(p16n_all_anc, 
-#      p16n_all_anc_1crate,
-#      file = "05_taxa_driving_groups/ancom_16sn.RData")
-load("05_taxa_driving_groups/ancom_16sn.RData")       
+# Trim ANCOM results after the fact
+anc_results_trimmed <- list()
 
-res_df <- p16n_all_anc_1crate$res
-# Reshape: gather LFC and FDR (q-value) columns
-plot_df <- res_df %>%
-  dplyr::select(taxon, starts_with("lfc_"), starts_with("q_"), starts_with("diff_")) %>%
-  pivot_longer(cols = -taxon, names_to = "metric", values_to = "value") %>%
-  separate(metric, into = c("type", "group"), sep = "_(?=cap|\\(Intercept\\))", extra = "merge") %>%
-  pivot_wider(names_from = type, values_from = value) %>%
-  filter(diff == TRUE, q < 0.05)  # Keep only significant taxa
+for (dataset_name in names(anc_results)) {
+  anc_results_trimmed[[dataset_name]] <- list()
+  
+  for (tax_level in names(anc_results[[dataset_name]])) {
+    res_obj <- anc_results[[dataset_name]][[tax_level]]
+    
+    anc_results_trimmed[[dataset_name]][[tax_level]] <- list(
+      res = res_obj$res
+      #res_global = res_obj$res_global,
+      #res_dunn = res_obj$res_dunn
+    )
+  }
+}
 
 
-plot_df$group <- str_replace_all(plot_df$group, "cap_wild_crate", "")
-plot_df$taxon <- gsub("_", " ", plot_df$taxon)
-plot_df <- plot_df %>%
-           mutate(group = ifelse(group == "(Intercept)", "Captive", group))
+# Optional: Save the trimmed version
+save(anc_results_trimmed, file = "05_taxa_driving_groups/ancom_16m_16n_18m_trimmed.RData")
+rm(anc_results)
 
-# Plot: barplot of LFCs
-n16_1crate <- ggplot(plot_df, aes(x = reorder(taxon, lfc), y = lfc, fill = group)) +
-  geom_col(position = position_dodge(width = 0.9)) +
-  coord_flip() +
-  labs(title = "Significant Differential Abundance (ANCOMBC2)",
-    x = "Taxon",
-    y = "Log Fold Change",
-    fill = "Group") +
-  scale_fill_manual(
-    values = c("Captive" = "#00AED7",
-      "New crates" = "#FD9347",
-      "Wild, free ranging" = "seagreen",
-      "Wild, seized from traffickers" = "purple4")) +
-  theme_bw(base_size = 14) +  # increases base text size and uses white background
-  theme(
-    plot.title = element_text(size = 16, face = "bold"),
-    axis.title = element_text(size = 14),
-    axis.text = element_text(size = 14),
-    legend.title = element_text(size = 14),
-    legend.text = element_text(size = 14))
+# Loop through datasets and taxonomic levels
+for (dataset_name in names(anc_results_trimmed)) {
+  for (tax_level in names(anc_results_trimmed[[dataset_name]])) {
+    
+    cat("Fetching ancom results for:", dataset_name, "at", tax_level, "\n")
+    res_obj <- anc_results_trimmed[[dataset_name]][[tax_level]]
+    
+    # Check if result object contains `res` element
+    if (!"res" %in% names(res_obj)) {
+      warning(paste("No 'res' in", dataset_name, tax_level))
+      next
+    }
+    res_df <- res_obj$res
+    res_df <- res_df %>% 
+              dplyr::filter(`q_(Intercept)` < 0.05)
+    cat("res_df size:", format(object.size(res_df), units = "MB"), "\n")
+    
+    # Check for valid results
+    if (nrow(res_df) == 0) next
+    
+    # Reshape the lfc, q, and diff values separately
+    lfc_df <- res_df %>%
+      select(taxon, starts_with("lfc_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "lfc") %>%
+      mutate(group = sub("lfc_", "", group))
+    
+    q_df <- res_df %>%
+      select(taxon, starts_with("q_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "q") %>%
+      mutate(group = sub("q_", "", group))
+    
+    diff_df <- res_df %>%
+      select(taxon, starts_with("diff_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "diff") %>%
+      mutate(group = sub("diff_", "", group))
+    
+    # Join all into a single long-form dataframe
+    plot_df <- reduce(list(lfc_df, q_df, diff_df), left_join, by = c("taxon", "group"))
+    
+    # Filter significant results
+    plot_df <- plot_df %>% filter(diff == TRUE, q < 0.05)
+    
+    if (nrow(plot_df) == 0) next  # Skip if no significant taxa
+    
+    # Clean and format for plotting
+    plot_df$group <- str_replace_all(plot_df$group, "cap_wild_crate", "")
+    plot_df$taxon <- gsub("_", " ", plot_df$taxon)
+    plot_df <- plot_df %>%
+      mutate(group = ifelse(group == "(Intercept)", "Captive", group)) 
+    plot_df$group <- sub("^Captive\\.", "", plot_df$group)
+    plot_df$group <- sub("WildWild", "Wild", plot_df$group)
+    
+    cat("plot_df size:", format(object.size(plot_df), units = "MB"), "\n")
+    
+    # Create plot
+    p <- ggplot(plot_df, aes(x = reorder(taxon, lfc), y = lfc, fill = group)) +
+      geom_col(position = position_dodge(width = 0.9)) +
+      coord_flip() +
+      labs(title = paste("Significant DA (ANCOMBC2):", dataset_name, "-", tax_level),
+           x = "Taxon", y = "Log Fold Change", fill = "Group") +
+      scale_fill_manual(
+        values = c("Captive" = "#00AED7",
+                   "Wild, free ranging" = "seagreen",
+                   "Wild, seized from traffickers" = "purple4")) +
+      theme_bw(base_size = 14) +
+      theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 14))
+    
+    # Define output file name
+    output_dir <- "05_taxa_driving_groups"
+    plot_file <- file.path(output_dir, 
+                           paste0(dataset_name, "_ancombc_", tolower(tax_level), ".png"))
+    ggsave(filename = plot_file, plot = p, height = 15, width = 18)
+  }
+}
 
-ggsave(filename = "05_taxa_driving_groups/16n_ancombc_1crate.png",n16_1crate, height=15, width=18)
+
 
 # MICROBIOME WORKSHOP
 ### https://yulab-smu.top/MicrobiotaProcessWorkshop/articles/MicrobiotaProcessWorkshop.html

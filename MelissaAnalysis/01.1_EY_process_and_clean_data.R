@@ -812,21 +812,28 @@ for (o in c("otu16m_mat_filt", "otu16n_mat_filt", "otu16ren_mat_filt",
   read_depth_thresh_50 <- 50
   read_depth_thresh_500 <- 500
   
+  read_depth_max_9500 <- 9500
+  
   # 24 dataframes will be made below
   assign(paste0(o, "_20"),  df[, colnames(df)[which(colSums(df) >= read_depth_thresh_20)]])
   assign(paste0(o, "_50"),  df[, colnames(df)[which(colSums(df) >= read_depth_thresh_50)]])
   assign(paste0(o, "_500"), df[, colnames(df)[which(colSums(df) >= read_depth_thresh_500)]])
   assign(paste0(o, "_outlier"), df[, colnames(df)[which(colSums(df) >= lower_bound)]])
+  assign(paste0(o, "_max_9500"), df[, colnames(df)[which(colSums(df) <= read_depth_max_9500)]])
+  assign(paste0(o, "data.frame(name = df_info$name_30, base = df_info$base, threshold = 30))"), 
+         df[, colnames(df)[which(colSums(df) <= read_depth_max_9500)]])
 }
 
 # # # # Step 3: # # # # 
 
 # Remove ESVs not seen more than 2 times in at least 10% or 30% of the samples 
 
-base_names <- c("otu16m_mat_filt", "otu1n_mat_filt", "otu16ren_mat_filt",
+base_names <- c("otu16m_mat_filt", "otu16n_mat_filt", #"otu16ren_mat_filt",
                 "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
 
-suffixes <- c("_20", "_50", "_500", "_outlier")
+base_names <- c("otu16ren_mat_filt")
+
+suffixes <- c("_20", "_50", "_500", "_outlier", "_max_9500")
 all_names <- as.vector(outer(base_names, suffixes, paste0))
 
 for (name in all_names) {
@@ -838,9 +845,12 @@ for (name in all_names) {
   
   min_count <- 2
   min_sample_fraction_10 <- 0.10 # for 10% 
-  min_sample_fraction_20 <- 0.30 # for 30 % 
+  min_sample_fraction_30 <- 0.30 # for 30 % 
+  min_sample_fraction_50 <- 0.50  # for 50%
+  
   min_sample_count_10 <- ceiling(ncol(temp) * min_sample_fraction_10)  
   min_sample_count_30 <- ceiling(ncol(temp) * min_sample_fraction_30)
+  min_sample_count_50 <- ceiling(ncol(temp) * min_sample_fraction_50)
   
   p <- ggplot(df_plot, aes(x = reads)) +
     geom_histogram(binwidth = 1000, fill = "steelblue", color = "black") +
@@ -857,8 +867,11 @@ for (name in all_names) {
   samples_per_taxa <- rowSums(presence_matrix) # samples per taxa meet that criterion
   otu_filtered_10 <- temp[samples_per_taxa >= min_sample_count_10, ]  # Keep taxa meeting threshold
   otu_filtered_30 <- temp[samples_per_taxa >= min_sample_count_30, ]
+  otu_filtered_50 <- temp[samples_per_taxa >= min_sample_count_50, ]
+  
   dim(otu_filtered_10)
   dim(otu_filtered_30)
+  dim(otu_filtered_50)
   
   # Print filtering summary 10 %
   cat("Filtering", name, " 10% ", "\n")
@@ -872,18 +885,30 @@ for (name in all_names) {
   cat("Removed taxa with 30% thresh:", nrow(temp) - nrow(otu_filtered_30), "\n")
   cat("Remaining taxa:", nrow(otu_filtered_30), "\n\n")
   
+  # Print filtering summary 50%
+  cat("Filtering", name, " 50% ", "\n")
+  cat("Original taxa:", nrow(temp), "\n")
+  cat("Removed taxa with 50% thresh:", nrow(temp) - nrow(otu_filtered_50), "\n")
+  cat("Remaining taxa:", nrow(otu_filtered_50), "\n\n")
+  
   # Optionally save the filtered matrix back with a new name
   assign(paste0(name, "_count_thresh_10"), otu_filtered_10)
   assign(paste0(name, "_count_thresh_30"), otu_filtered_30)
+  assign(paste0(name, "_count_thresh_50"), otu_filtered_50)
 }
 
 ### Final loop 
 
 # Reconstruct the name grid with base names and suffixes
-base_names <- c("otu16m_mat_filt", "otu16n_mat_filt", "otu16ren_mat_filt",
-                "otu18m_nohost_mat_filt", "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
-esv_list <- c(esv_16m_filt, esv_16n_filt, esv_16ren_filt,
-              esv_18m_nohost_filt, esv_18m_nohost_filt, esv_18ren_nohost_filt)
+base_names <- c("otu16m_mat_filt", "otu16n_mat_filt","otu18m_nohost_mat_filt", 
+                "otu18n_nohost_mat_filt", "otu18ren_nohost_mat_filt")
+base_names <- c("otu16ren_mat_filt")
+
+esv_list <- c(esv_16m_filt, esv_16n_filt, esv_18m_nohost_filt, 
+              esv_18m_nohost_filt, esv_18ren_nohost_filt)
+esv_list <- c(esv_16ren_filt)
+
+suffixes <- c("_20", "_50", "_500", "_outlier", "_max_9500")
 suffixes <- c("_20", "_50", "_500", "_outlier")
 reads_list <- c(reads_16, reads_16ren, reads_18, reads_18ren)
 
@@ -912,12 +937,14 @@ df_info <- expand.grid(
 # Add the threshold versions
 df_info$name_10 <- paste0(df_info$base, df_info$suffix) 
 df_info$name_30 <- paste0(df_info$base, df_info$suffix)
+df_info$name_50 <- paste0(df_info$base, df_info$suffix)
 
 head(df_info)# Combine and add base_name info
 
 all_df_info <- rbind(
   data.frame(name = df_info$name_10, base = df_info$base, threshold = 10),
-  data.frame(name = df_info$name_30, base = df_info$base, threshold = 30))
+  data.frame(name = df_info$name_30, base = df_info$base, threshold = 30),
+  data.frame(name = df_info$name_50, base = df_info$base, threshold = 50))
 
 # Loop over each filtered name and use correct esv_list entry
 for (i in seq_len(nrow(all_df_info))) {
