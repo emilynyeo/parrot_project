@@ -1,4 +1,4 @@
-# Which Taxa drive the differences between groups? 
+# Which Taxa drive the differences between groups? - Using ANCOMBC 
 
 #### Load libraries ####
 pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
@@ -37,11 +37,18 @@ phyloseq_list <- list(
   phyloseq18m = phyloseq18m,
   phyloseq18n = phyloseq18n)
 
+# rename wild cap groups 
+for (i in seq_along(phyloseq_list)) {
+  phy <- phyloseq_list[[i]]
+  sd <- as.data.frame(sample_data(phy))
+  sd$captive_wild <- factor(sd$Captive.Wild,
+                            levels = c("Captive", "Wild, free ranging", "Wild, seized from traffickers"),
+                            labels = c("Captive", "Wild", "Seized"))
+  sample_data(phy) <- sample_data(sd)
+  phyloseq_list[[i]] <- phy
+}
+
 anc_results <- list()
-
-sample_df <- as.data.frame(sample_data(phyloseq16m))
-head(sample_df$Captive.Wild)
-
 for (name in names(phyloseq_list)) {
   cat("Processing:", name, "\n")
   phy <- phyloseq_list[[name]]
@@ -50,24 +57,24 @@ for (name in names(phyloseq_list)) {
   # ANCOMBC Genus
   cat("Running family level ANCOMBC2 on: ", name, "\n")
   anc_family <-  ancombc2(data = phy, tax_level = "Family",
-                         fix_formula = "Captive.Wild", rand_formula = NULL,
+                         fix_formula = "captive_wild", rand_formula = NULL,
                          p_adj_method = "holm", pseudo_sens = TRUE,
                          prv_cut = 0.01, lib_cut = 50, s0_perc = 0.05,
-                         group = "Captive.Wild", struc_zero = TRUE, neg_lb = TRUE)
+                         group = "captive_wild", struc_zero = TRUE, neg_lb = TRUE)
   
   cat("Running genus level ANCOMBC2 on: ", name, "\n")
   anc_genus <-  ancombc2(data = phy, tax_level = "Genus",
-                         fix_formula = "Captive", rand_formula = NULL,
+                         fix_formula = "captive_wild", rand_formula = NULL,
                          p_adj_method = "holm", pseudo_sens = TRUE,
                          prv_cut = 0.01, lib_cut = 50, s0_perc = 0.05,
-                         group = "Captive", struc_zero = TRUE, neg_lb = TRUE)
+                         group = "captive_wild", struc_zero = TRUE, neg_lb = TRUE)
   
   cat("Running species level ANCOMBC2 on: ", name, "\n")
   anc_species <-  ancombc2(data = phy, tax_level = "Species",
-                         fix_formula = "Captive", rand_formula = NULL,
+                         fix_formula = "captive_wild", rand_formula = NULL,
                          p_adj_method = "holm", pseudo_sens = TRUE,
                          prv_cut = 0.1, lib_cut = 50, s0_perc = 0.05,
-                         group = "Captive", struc_zero = TRUE, neg_lb = TRUE)
+                         group = "captive_wild", struc_zero = TRUE, neg_lb = TRUE)
   
   anc_results[[name]] <- list(
     family = anc_family,
@@ -147,7 +154,7 @@ for (dataset_name in names(anc_results_trimmed)) {
     if (nrow(plot_df) == 0) next  # Skip if no significant taxa
     
     # Clean and format for plotting
-    plot_df$group <- str_replace_all(plot_df$group, "cap_wild_crate", "")
+    plot_df$group <- str_replace_all(plot_df$group, "captive_wild", "")
     plot_df$taxon <- gsub("_", " ", plot_df$taxon)
     plot_df <- plot_df %>%
       mutate(group = ifelse(group == "(Intercept)", "Captive", group)) 
@@ -163,9 +170,8 @@ for (dataset_name in names(anc_results_trimmed)) {
       labs(title = paste("Significant DA (ANCOMBC2):", dataset_name, "-", tax_level),
            x = "Taxon", y = "Log Fold Change", fill = "Group") +
       scale_fill_manual(
-        values = c("Captive" = "#00AED7",
-                   "Wild, free ranging" = "seagreen",
-                   "Wild, seized from traffickers" = "purple4")) +
+        values = c("Captive" = "#00AED7", "Wild" = "seagreen",
+                   "Seized" = "purple4")) +
       theme_bw(base_size = 14) +
       theme(plot.title = element_text(size = 16, face = "bold"),
         axis.title = element_text(size = 14),
@@ -176,12 +182,201 @@ for (dataset_name in names(anc_results_trimmed)) {
     # Define output file name
     output_dir <- "05_taxa_driving_groups"
     plot_file <- file.path(output_dir, 
-                           paste0(dataset_name, "_ancombc_", tolower(tax_level), ".png"))
+                           paste0(dataset_name, "_ancombc_all_", tolower(tax_level), ".png"))
     ggsave(filename = plot_file, plot = p, height = 15, width = 18)
   }
 }
 
 
+# Overlap of Taxa 
+
+library(dplyr)
+library(tidyr)
+library(VennDiagram)
+library(grid)  # For grid.draw()
+
+# List of your 4 datasets at family level
+datasets <- c("phyloseq16m", "phyloseq16n", "phyloseq18m", "phyloseq18n")
+
+# Initialize list to store significant taxa per dataset
+sig_taxa_family <- list()
+
+for (dataset_name in datasets) {
+  res_obj <- anc_results_trimmed[[dataset_name]][["family"]]
+  
+  if (!"res" %in% names(res_obj)) {
+    warning(paste("No 'res' in", dataset_name, "family"))
+    next
+  }
+  
+  res_df <- res_obj$res %>%
+    filter(`q_(Intercept)` < 0.05)  # initial filter
+  
+  if (nrow(res_df) == 0) {
+    message(paste("No significant taxa for", dataset_name))
+    next
+  }
+  
+  # Get q and diff values for each group (like in your original code)
+  q_df <- res_df %>%
+    select(taxon, starts_with("q_")) %>%
+    pivot_longer(cols = -taxon, names_to = "group", values_to = "q") %>%
+    mutate(group = sub("q_", "", group))
+  
+  diff_df <- res_df %>%
+    select(taxon, starts_with("diff_")) %>%
+    pivot_longer(cols = -taxon, names_to = "group", values_to = "diff") %>%
+    mutate(group = sub("diff_", "", group))
+  
+  plot_df <- left_join(q_df, diff_df, by = c("taxon", "group")) %>%
+    filter(diff == TRUE, q < 0.05)
+  
+  if (nrow(plot_df) == 0) {
+    message(paste("No significant diff taxa for", dataset_name))
+    next
+  }
+  
+  sig_taxa_family[[dataset_name]] <- unique(plot_df$taxon)
+}
+
+# Create presence/absence dataframe
+all_taxa <- unique(unlist(sig_taxa_family))
+presence_absence_df <- sapply(sig_taxa_family, function(taxa) all_taxa %in% taxa)
+presence_absence_df <- as.data.frame(presence_absence_df)
+presence_absence_df$taxon <- all_taxa
+presence_absence_df <- presence_absence_df %>% select(taxon, everything())
+
+# Save to CSV
+write.csv(presence_absence_df, "05_taxa_driving_groups/family_level_significant_taxa_presence.csv", row.names = FALSE)
+message("CSV of presence/absence saved: family_level_significant_taxa_presence.csv")
+
+# Draw Venn diagram for 4 sets
+venn_plot <- venn.diagram(
+  x = sig_taxa_family,
+  category.names = names(sig_taxa_family),
+  filename = NULL,
+  output = TRUE,
+  imagetype = "png",
+  height = 550,
+  width = 600,
+  resolution = 300,
+  fill = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"),
+  alpha = 0.5,
+  main.cex = 1,
+  cat.cex = 1,
+  sub.cex = 1,
+  main = "Overlap of Significant Family-level Taxa from ANCOMBC"
+)
+
+png("05_taxa_driving_groups/family_level_significant_taxa_venn.png", height=550, width=1900, res=300)
+grid.draw(venn_plot)
+dev.off()
+message("Venn diagram saved: family_level_significant_taxa_venn.png")
+
+
+###
+library(dplyr)
+library(tidyr)
+library(VennDiagram)
+library(grid)
+
+# Function to get significant taxa, save presence/absence CSV and Venn diagram
+process_tax_level <- function(tax_level, datasets, output_dir = "05_taxa_driving_groups") {
+  
+  sig_taxa_list <- list()
+  
+  for (dataset_name in datasets) {
+    if (!tax_level %in% names(anc_results_trimmed[[dataset_name]])) {
+      message(paste("No", tax_level, "level data for", dataset_name))
+      next
+    }
+    
+    res_obj <- anc_results_trimmed[[dataset_name]][[tax_level]]
+    
+    if (!"res" %in% names(res_obj)) {
+      warning(paste("No 'res' in", dataset_name, tax_level))
+      next
+    }
+    
+    res_df <- res_obj$res %>% filter(`q_(Intercept)` < 0.05)
+    
+    if (nrow(res_df) == 0) {
+      message(paste("No significant taxa for", dataset_name, tax_level))
+      next
+    }
+    
+    q_df <- res_df %>%
+      select(taxon, starts_with("q_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "q") %>%
+      mutate(group = sub("q_", "", group))
+    
+    diff_df <- res_df %>%
+      select(taxon, starts_with("diff_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "diff") %>%
+      mutate(group = sub("diff_", "", group))
+    
+    plot_df <- left_join(q_df, diff_df, by = c("taxon", "group")) %>%
+      filter(diff == TRUE, q < 0.05)
+    
+    if (nrow(plot_df) == 0) {
+      message(paste("No significant diff taxa for", dataset_name, tax_level))
+      next
+    }
+    
+    sig_taxa_list[[dataset_name]] <- unique(plot_df$taxon)
+  }
+  
+  # Make presence/absence dataframe
+  all_taxa <- unique(unlist(sig_taxa_list))
+  presence_absence_df <- sapply(sig_taxa_list, function(taxa) all_taxa %in% taxa)
+  presence_absence_df <- as.data.frame(presence_absence_df)
+  presence_absence_df$taxon <- all_taxa
+  presence_absence_df <- presence_absence_df %>% select(taxon, everything())
+  
+  # Save CSV
+  csv_path <- file.path(output_dir, paste0(tax_level, "_level_significant_taxa_presence.csv"))
+  write.csv(presence_absence_df, csv_path, row.names = FALSE)
+  message(paste("CSV saved for", tax_level, "level at:", csv_path))
+  
+  # Venn diagram (only works well for up to 5 sets)
+  if (length(sig_taxa_list) >= 2 && length(sig_taxa_list) <= 5) {
+    venn_plot <- venn.diagram(
+      x = sig_taxa_list,
+      category.names = names(sig_taxa_list),
+      filename = NULL,
+      output = TRUE,
+      imagetype = "png",
+      height = 500,
+      width = 650,
+      resolution = 300,
+      fill = rainbow(length(sig_taxa_list)),
+      alpha = 0.5,
+      main.cex = 1.5,
+      cat.cex = 1.1,
+      main = paste("Overlap of Significant", tax_level, "level Taxa from ANCOMBC"))
+    
+    png_path <- file.path(output_dir, paste0(tax_level, "_level_significant_taxa_venn.png"))
+    png(png_path, height = 800, width = 1800, res = 300)
+    grid.draw(venn_plot)
+    dev.off()
+    message(paste("Venn diagram saved for", tax_level, "level at:", png_path))
+  } else {
+    message("Venn diagram skipped: need 2-5 datasets with significant taxa at ", tax_level, " level.")
+  }
+}
+
+# Define your datasets
+datasets <- c("phyloseq16m", "phyloseq16n", "phyloseq18m", "phyloseq18n")
+
+# Run for family, genus, and species levels
+levels <- c("family", "genus", "species")
+
+for (level in levels) {
+  process_tax_level(level, datasets)
+}
+
+
+####################################
 
 # MICROBIOME WORKSHOP
 ### https://yulab-smu.top/MicrobiotaProcessWorkshop/articles/MicrobiotaProcessWorkshop.html

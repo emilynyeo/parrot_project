@@ -11,6 +11,10 @@ library(ggplot2)
 library(gridExtra)
 library(scales)
 library(calecopal)
+pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
+               MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
+               UpSetR, gridExtra, grid, WGCNA, indicspecies, lubridate, scales,
+               calecopal)
 
 setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 

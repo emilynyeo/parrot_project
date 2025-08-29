@@ -7,6 +7,7 @@ pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
                e1071, calecopal, purrr, stringr, dplyr, ggtree)
 library(furrr)
 library(future)
+library(readr)
 bigsur = c("#E4DECE", "#ECBD95", "#9BB1BB", "#79ACBD", "#346575", "#0B4221")
 setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 #BiocManager::install(c("GO.db", "impute", "preprocessCore"))
@@ -122,6 +123,7 @@ run_microbiome_model <- function(physeq_obj,
 
 # Step 1: Load all phyloseq RDS files
 setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
+phyloseq_files <- readRDS("01.1_qc_checks/all_phyloseq_object_names.rds")
 phyloseq_files <- list.files("01.1_qc_checks", pattern = "^phyloseq_.*\\.rds$", full.names = TRUE)
 
 file_df <- data.frame(
@@ -135,9 +137,30 @@ file_df <- data.frame(
     clean_id = str_remove(clean_id, "_mat_filt"),
     base = str_remove(base, "_mat_filt"))
 
+file_df <- data.frame(
+  name = phyloseq_files,
+  file = paste0(phyloseq_files, ".rds"),
+  stringsAsFactors = FALSE) %>%
+  mutate(
+    full_path = file.path("01.1_qc_checks", file),
+    clean_id = sub("^phyloseq_", "", tools::file_path_sans_ext(file)),
+    base = str_extract(clean_id, "^otu\\d{2}[a-z]+(_nohost)?"),
+    suffix_thresh = str_replace(clean_id, "^otu\\d{2}[a-z]+(_nohost)?_", ""))
+
+file_df <- data.frame(
+  name = phyloseq_files,
+  file = paste0(phyloseq_files, ".rds"),
+  stringsAsFactors = FALSE) %>%
+  mutate(full_path = file.path("01.1_qc_checks", file),
+    clean_id = sub("^phyloseq_", "", tools::file_path_sans_ext(file)),
+    base = str_extract(clean_id, "^otu\\d{2}[a-z]+(_nohost)?"),
+    suffix_thresh = str_replace(clean_id, "^otu\\d{2}[a-z]+(_nohost)?_mat_filt_", ""))
+
+
 suffixes_thresholds <- unique(file_df$suffix_thresh)
 remaining_suff_thresh <- c("outlier_thr20","outlier_thr30","outlier_thr50",
                            "max_9500_thr30", "max_9500_thr50","max_9500_thr10")
+remaining_suff_thresh <- c("20_thr10", "500_thr10", "outlier_thr10", "max_9500_thr10")
 
 ### Trying multiple seeds below ###
 
@@ -248,6 +271,143 @@ extract_metrics <- function(model_result, model_name, id = NULL) {
   return(df)
 }
 
+### Extra new call for the above 
+
+# Define file directory
+rds_dir <- "01.1_qc_checks"
+
+# Flatten out non-merge groups into a name-path map
+non_merge_groups <- list(
+  "phyloseq16n" = "otu16n",
+  "phyloseq16m" = "otu16m",
+  "phyloseq18n" = "otu18n",
+  "phyloseq18m" = "otu18m_nohost"
+)
+
+# Define suffixes to loop through
+remaining_suff_thresh <- c(
+  "mat_filt_20_thr10", 
+  "mat_filt_500_thr10", 
+  "mat_filt_outlier_thr10"
+)
+
+# Step 1: Create a named list of expected file paths
+phyloseq_files <- list()
+
+for (group_name in names(non_merge_groups)) {
+  base <- non_merge_groups[[group_name]]
+  
+  for (sfx in remaining_suff_thresh) {
+    clean_id <- paste0(group_name, "_", sfx)
+    file_name <- paste0("phyloseq_", base, "_", sfx, ".rds")
+    #file_name <- paste0("phyloseq_", base, "_mat_filt_", sfx, ".rds")
+    file_path <- file.path(rds_dir, file_name)
+    
+    if (file.exists(file_path)) {
+      phyloseq_files[[clean_id]] <- file_path
+    } else {
+      message("Skipping ", clean_id, " - file not found: ", file_path)
+    }
+  }
+}
+
+# Step 2: Read all RDS files into memory
+phyloseq_objs <- lapply(phyloseq_files, load)
+
+# Step 3: Loop through loaded objects and run model code
+for (clean_id in names(phyloseq_objs)) {
+  ps <- phyloseq_objs[[clean_id]]
+  
+  sample_df <- as.data.frame(phyloseq::sample_data(ps))
+  sample_df$cap_wild_crate <- as.character(sample_df$Captive.Wild)
+  sample_df$cap_wild_crate[sample_df$Captive.Wild %in% c("Crate 1: Unknown origin", "Crate 2: Unknown origin")] <- "New crates"
+  sample_df$cap_wild_crate <- factor(sample_df$cap_wild_crate,
+                                     levels = c("Captive",
+                                                "Wild, free ranging",
+                                                "Wild, seized from traffickers",
+                                                "New crates"))
+  sample_data(ps) <- sample_data(sample_df)
+  
+  if (!"cap_wild_crate" %in% colnames(sample_data(ps))) {
+    message("Skipping ", clean_id, " - missing 'cap_wild_crate'")
+    next
+  }
+  
+  ps_filtered <- subset_samples(ps, cap_wild_crate != "New crates")
+  
+  cat("Running models for:", clean_id, "\n")
+  
+  results_rf <- run_microbiome_model_cv10(
+    physeq_obj = ps_filtered,
+    group_var = "cap_wild_crate",
+    method = "rf",
+    p = 0.75, seed = 241, cv_folds = 4,
+    num_iterations = 5,
+    plot_results = TRUE)
+  
+  results_xgbTree <- run_microbiome_model_cv10(
+    physeq_obj = ps_filtered,
+    group_var = "cap_wild_crate",
+    method = "xgbTree",
+    p = 0.75, seed = 241, cv_folds = 4,
+    num_iterations = 5,
+    plot_results = TRUE)
+  
+  rf_df <- extract_metrics(results_rf, "Random Forest", id = clean_id)
+  xgbTree_df <- extract_metrics(results_xgbTree, "xgbTree", id = clean_id)
+  
+  all_metrics <- bind_rows(rf_df, xgbTree_df)
+  metrics_long <- all_metrics %>%
+    pivot_longer(cols = c(Sensitivity, Specificity, `Balanced Accuracy`),
+                 names_to = "Metric", values_to = "Value")
+  metrics_long$Class <- gsub("\\.\\.", " ", gsub("\\.", " ", metrics_long$Class))
+  
+  # Save results
+  write.csv(metrics_long,
+            file = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_mods_no_crates_metrics_", clean_id,".csv"),
+            row.names = FALSE)
+  
+  mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Model)) +
+    geom_col(position = position_dodge()) +
+    facet_wrap(~Metric, scales = "free_y") +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Model Performances by Parrot Group for QC: ", clean_id),
+         y = "Metric Value", x = "Group") +
+    scale_fill_manual(values = cal_palette("superbloom3")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 14),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title = element_text(face = "bold", size = 16),
+      legend.title = element_text(face = "bold", size = 14),
+      legend.text = element_text(face = "bold", size = 12),
+      plot.title = element_text(face = "bold", size = 18, hjust = 0.5)
+    )
+  
+  ggsave(filename = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_models_no_crates_", clean_id,".png"),
+         mod_results_compare, height = 15, width = 18)
+  
+  save(results_rf, results_xgbTree,
+       file = paste0("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree_", clean_id, ".RData"))
+  
+  plots <- list(
+    rf_conf = results_rf$confusion_plot,
+    rf_imp = results_rf$importance_plot,
+    xgb_conf = results_xgbTree$confusion_plot,
+    xgb_imp = results_xgbTree$importance_plot)
+  
+  for (plot_type in names(plots)) {
+    p <- plots[[plot_type]]
+    if (!is.null(p)) {
+      ggsave(
+        filename = paste0("06.2_qc_group_pred_models/class_no_2samples/", plot_type, "_", clean_id, ".png"),
+        plot = p, width = 8, height = 6, dpi = 300
+      )
+    }
+  }
+}
+
+
+
 ## New call for the function above
 
 # Setup parallel backend: use all but 2 cores
@@ -260,11 +420,13 @@ merge_groups <- list(
   #"phyloseq18n" = c("otu18n_nohost", "otu18ren_nohost"))
 
 non_merge_groups <- list(
+  "phyloseq16n" = c("otu16n"),
   "phyloseq16m" = c("otu16m"),
+  "phyloseq18n" = c("otu18n"), 
   "phyloseq18m" = c("otu18m_nohost"))
 
 all_groups <- list(
-  merge = merge_groups,
+  # merge = merge_groups,
   no_merge = non_merge_groups)
 
 # Must define once outside loop
@@ -292,11 +454,14 @@ for (sfx in remaining_suff_thresh) {
       }
       
       # Load phyloseq objects
-      phylo_objs <- lapply(matching_paths$path, function(path) {
-        env <- new.env()
-        obj_name <- load(path, envir = env)
-        env[[obj_name]]
-      })
+      #phylo_objs <- lapply(matching_paths$path, function(path) {
+      #  env <- new.env()
+      #  obj_name <- load(path, envir = env)
+      #  env[[obj_name]]
+      #})
+      
+      phylo_objs <- lapply(matching_paths$full_path, readRDS)
+      
       
       # Merge if needed, or use single object
       ps_merged <- if (merge_status == "merge") {
@@ -353,7 +518,7 @@ for (sfx in remaining_suff_thresh) {
       metrics_long$Class <- gsub("\\.\\.", " ", gsub("\\.", " ", metrics_long$Class))
       
       write.csv(metrics_long,
-                file = paste0("06.2_qc_group_pred_models/compare_mods_no_crates_metrics", clean_id,".csv"),
+                file = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_mods_no_crates_metrics", clean_id,".csv"),
                 row.names = FALSE)
       
       mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Model)) +
@@ -372,11 +537,11 @@ for (sfx in remaining_suff_thresh) {
           plot.title = element_text(face = "bold", size = 18, hjust = 0.5)
         )
       
-      ggsave(filename = paste0("06.2_qc_group_pred_models/compare_models_no_crates", clean_id,".png"),
+      ggsave(filename = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_models_no_crates", clean_id,".png"),
              mod_results_compare, height = 15, width = 18)
       
       save(results_rf, results_xgbTree,
-           file = paste0("06.2_qc_group_pred_models/models_rf_xgbtree", clean_id, ".RData"))
+           file = paste0("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree", clean_id, ".RData"))
       
       plots <- list(
         rf_conf = results_rf$confusion_plot,
@@ -388,7 +553,7 @@ for (sfx in remaining_suff_thresh) {
         p <- plots[[plot_type]]
         if (!is.null(p)) {
           ggsave(
-            filename = paste0("06.2_qc_group_pred_models/", plot_type, "_", clean_id, ".png"),
+            filename = paste0("06.2_qc_group_pred_models/class_no_2samples/", plot_type, "_", clean_id, ".png"),
             plot = p, width = 8, height = 6, dpi = 300
           )
         }
@@ -607,9 +772,7 @@ for (sfx in suffixes_thresholds) {
 }}
 # 
 
-library(readr)
-library(dplyr)
-library(ggplot2)
+
 
 # 1. List all relevant CSV files in the directory
 file_paths <- list.files(path = "06.2_qc_group_pred_models", 
