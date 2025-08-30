@@ -110,11 +110,11 @@ run_microbiome_model <- function(physeq_obj,
   # Return everything as a named list
   return(list(
     model                = model,
-    predictions          = pred,
-    confusion_matrix     = confusion,
-    sensitivity_specificity = sens_spec,
-    mean_sensitivity     = mean_sens,
-    mean_specificity     = mean_spec,
+    pred          = pred,
+    confusion     = confusion,
+    sens_spec = sens_spec,
+    mean_sens    = mean_sens,
+    mean_spec    = mean_spec,
     confusion_plot       = confusion_plot,
     importance_plot      = importance_plot
   ))
@@ -185,6 +185,7 @@ run_microbiome_model_cv10 <- function(physeq_obj,
   
   results_list <- list()
   metrics_list <- list()
+  predictions_list <- list()
   
   for (i in 1:num_iterations) {
     cat(paste0("\n Starting iteration ", i, " of ", num_iterations, "...\n"))
@@ -207,7 +208,25 @@ run_microbiome_model_cv10 <- function(physeq_obj,
                    metric = "Accuracy"))
     
     cat(" Predicting on test data...\n")
+    #pred <- suppressWarnings(predict(model, newdata = testData))
+    
     pred <- suppressWarnings(predict(model, newdata = testData))
+    pred_probs <- try(predict(model, newdata = testData, type = "prob"), silent = TRUE)
+    
+    pred_df <- data.frame(
+      Iteration = i,
+      SampleID = rownames(testData),
+      True = testData$Group,
+      Pred = pred
+    )
+    
+    # Add probabilities if available
+    if (!inherits(pred_probs, "try-error")) {
+      pred_df <- cbind(pred_df, pred_probs)
+    }
+    
+    predictions_list[[i]] <- pred_df
+    
     conf <- confusionMatrix(pred, as.factor(testData$Group))
     
     cat(" Computing confusion matrix...\n")
@@ -258,7 +277,8 @@ run_microbiome_model_cv10 <- function(physeq_obj,
     mean_metrics = metrics_mean,
     sd_metrics = metrics_sd,
     confusion_plot = if (plot_results) confusion_plot else NULL,
-    importance_plot = if (plot_results) importance_plot else NULL
+    importance_plot = if (plot_results) importance_plot else NULL,
+    raw_predictions = do.call(rbind, predictions_list)
   ))
 }
 
@@ -312,11 +332,56 @@ for (group_name in names(non_merge_groups)) {
 }
 
 # Step 2: Read all RDS files into memory
-phyloseq_objs <- lapply(phyloseq_files, load)
+load("01.1_qc_checks/phyloseq_otu16n_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu16n_mat_filt_500_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu16n_mat_filt_outlier_thr10.rds")
+
+load("01.1_qc_checks/phyloseq_otu16m_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu16m_mat_filt_500_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu16m_mat_filt_outlier_thr10.rds")
+
+load("01.1_qc_checks/phyloseq_otu18m_nohost_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18m_nohost_mat_filt_500_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18m_nohost_mat_filt_outlier_thr10.rds")
+
+load("01.1_qc_checks/phyloseq_otu18n_nohost_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18n_nohost_mat_filt_500_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18n_nohost_mat_filt_outlier_thr10.rds")
+
+phyloseq_objs <- c("phyloseq_otu16n_mat_filt_20_thr10", "phyloseq_otu16n_mat_filt_500_thr10", "phyloseq_otu16n_mat_filt_outlier_thr10",
+                   "phyloseq_otu16m_mat_filt_20_thr10", "phyloseq_otu16m_mat_filt_500_thr10", "phyloseq_otu16m_mat_filt_outlier_thr10",
+                   "phyloseq_otu18m_nohost_mat_filt_20_thr10.rds", "phyloseq_otu18m_nohost_mat_filt_500_thr10.rds", "phyloseq_otu18m_nohost_mat_filt_outlier_thr10.rds",
+                   "phyloseq_otu18n_nohost_mat_filt_20_thr10.rds", "phyloseq_otu18n_nohost_mat_filt_500_thr10.rds", "phyloseq_otu18n_nohost_mat_filt_outlier_thr10.rds")
+
+phyloseq_objs <- list(n16_20_thr10 = phyloseq_otu16n_mat_filt_20_thr10)
+
+phyloseq_objs <- list(
+  #n16_20_thr10         = phyloseq_otu16n_mat_filt_20_thr10,
+  n16_500_thr10        = phyloseq_otu16n_mat_filt_500_thr10,
+  n16_outlier_thr10    = phyloseq_otu16n_mat_filt_outlier_thr10,
+  
+  m16_20_thr10         = phyloseq_otu16m_mat_filt_20_thr10,
+  m16_500_thr10        = phyloseq_otu16m_mat_filt_500_thr10,
+  m16_outlier_thr10    = phyloseq_otu16m_mat_filt_outlier_thr10,
+  
+  m18_20_thr10         = phyloseq_otu18m_nohost_mat_filt_20_thr10,
+  m18_500_thr10        = phyloseq_otu18m_nohost_mat_filt_500_thr10,
+  m18_outlier_thr10    = phyloseq_otu18m_nohost_mat_filt_outlier_thr10,
+  
+  n18_20_thr10         = phyloseq_otu18n_nohost_mat_filt_20_thr10,
+  n18_500_thr10        = phyloseq_otu18n_nohost_mat_filt_500_thr10,
+  n18_outlier_thr10    = phyloseq_otu18n_nohost_mat_filt_outlier_thr10
+)
+
 
 # Step 3: Loop through loaded objects and run model code
+# Register cluster
+cluster <- makeCluster(n_cores - 2)
+registerDoParallel(cluster)
+
 for (clean_id in names(phyloseq_objs)) {
   ps <- phyloseq_objs[[clean_id]]
+  #ps <- get(phyloseq_objs[[clean_id]])
   
   sample_df <- as.data.frame(phyloseq::sample_data(ps))
   sample_df$cap_wild_crate <- as.character(sample_df$Captive.Wild)
@@ -341,16 +406,16 @@ for (clean_id in names(phyloseq_objs)) {
     physeq_obj = ps_filtered,
     group_var = "cap_wild_crate",
     method = "rf",
-    p = 0.75, seed = 241, cv_folds = 4,
-    num_iterations = 5,
+    p = 0.75, seed = 241, cv_folds = 3,
+    num_iterations = 3,
     plot_results = TRUE)
   
   results_xgbTree <- run_microbiome_model_cv10(
     physeq_obj = ps_filtered,
     group_var = "cap_wild_crate",
     method = "xgbTree",
-    p = 0.75, seed = 241, cv_folds = 4,
-    num_iterations = 5,
+    p = 0.75, seed = 241, cv_folds = 3,
+    num_iterations = 3,
     plot_results = TRUE)
   
   rf_df <- extract_metrics(results_rf, "Random Forest", id = clean_id)
@@ -406,485 +471,53 @@ for (clean_id in names(phyloseq_objs)) {
   }
 }
 
+stopCluster(cl = cluster)
 
 
-## New call for the function above
+# Read and combine all saved CSVs
+all_metrics <- list.files("06.2_qc_group_pred_models/class_no_2samples/", 
+                          pattern = "^compare_mods_no_crates_metrics_.*\\.csv$", 
+                          full.names = TRUE) %>% 
+  map_df(read_csv)
 
-# Setup parallel backend: use all but 2 cores
-#Sys.setenv(R_MAX_VSIZE = "5G")
-#available_cores <- parallel::detectCores()
-#plan(multisession, workers = available_cores - 2)
+# Plot
+ggplot(all_metrics, aes(x = ID, y = Value, color = Model, group = Model)) +
+  geom_point(size = 3) +
+  #geom_line() +
+  facet_wrap(~Metric, scales = "free_y") +
+  theme_minimal(base_size = 14) +
+  labs(x = "Dataset ID", y = "Metric Value", title = "Model Performance Comparison Across Datasets") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-merge_groups <- list(
-  "phyloseq16n" = c("otu16n", "otu16ren")) #,
-  #"phyloseq18n" = c("otu18n_nohost", "otu18ren_nohost"))
+# Sort results from highest to lowest
+results_sorted <- all_metrics %>%
+  dplyr::filter(Metric == "Balanced Accuracy") %>% 
+  arrange(desc(Value)) %>% 
+  dplyr::mutate(ID = gsub("thr", "t", ID)) %>% 
+  dplyr::mutate(ID = gsub("_", " ", ID))
 
-non_merge_groups <- list(
-  "phyloseq16n" = c("otu16n"),
-  "phyloseq16m" = c("otu16m"),
-  "phyloseq18n" = c("otu18n"), 
-  "phyloseq18m" = c("otu18m_nohost"))
+results_summary <- results_sorted %>%
+  group_by(ID, Model) %>%
+  summarise(
+    count = n(),
+    mean_val = mean(Value),
+    sd_val = sd(Value),
+    se_val = sd(Value) / sqrt(n())) %>%
+  arrange(desc(se_val))
 
-all_groups <- list(
-  # merge = merge_groups,
-  no_merge = non_merge_groups)
-
-# Must define once outside loop
-# Already included in the updated function previously
-# extract_metrics <- function(...) {...}
-
-for (sfx in remaining_suff_thresh) {
-  for (merge_status in names(all_groups)) {
-    group_list <- all_groups[[merge_status]]
-    
-    for (group_name in names(group_list)) {
-      base_parts <- group_list[[group_name]]
-      
-      matching_paths <- file_df %>%
-        filter(base %in% base_parts, suffix_thresh == sfx) %>%
-        arrange(base)
-      
-      if (merge_status == "merge" && nrow(matching_paths) < 2) {
-        message("Skipping ", group_name, "_", sfx, " (not all parts found)")
-        next
-      }
-      if (merge_status == "no_merge" && nrow(matching_paths) < 1) {
-        message("Skipping ", group_name, "_", sfx, " (file not found)")
-        next
-      }
-      
-      # Load phyloseq objects
-      #phylo_objs <- lapply(matching_paths$path, function(path) {
-      #  env <- new.env()
-      #  obj_name <- load(path, envir = env)
-      #  env[[obj_name]]
-      #})
-      
-      phylo_objs <- lapply(matching_paths$full_path, readRDS)
-      
-      
-      # Merge if needed, or use single object
-      ps_merged <- if (merge_status == "merge") {
-        do.call(merge_phyloseq, phylo_objs)
-      } else {
-        phylo_objs[[1]]
-      }
-      
-      clean_id <- paste0(group_name, "_", sfx)
-      
-      sample_df <- as.data.frame(sample_data(ps_merged))
-      sample_df$cap_wild_crate <- as.character(sample_df$Captive.Wild)
-      sample_df$cap_wild_crate[sample_df$Captive.Wild %in% c("Crate 1: Unknown origin", "Crate 2: Unknown origin")] <- "New crates"
-      sample_df$cap_wild_crate <- factor(sample_df$cap_wild_crate,
-                                         levels = c("Captive",
-                                                    "Wild, free ranging",
-                                                    "Wild, seized from traffickers",
-                                                    "New crates"))
-      sample_data(ps_merged) <- sample_data(sample_df)
-      
-      if (!"cap_wild_crate" %in% colnames(sample_data(ps_merged))) {
-        message("Skipping ", clean_id, " - missing 'cap_wild_crate'")
-        next
-      }
-      
-      phyloseq_no_new_crates <- subset_samples(ps_merged, cap_wild_crate != "New crates")
-      
-      cat("Running models for:", clean_id, "\n")
-      
-      results_rf <- run_microbiome_model_cv10(
-        physeq_obj = phyloseq_no_new_crates,
-        group_var = "cap_wild_crate",
-        method = "rf",
-        p = 0.75, seed = 241, cv_folds = 4,
-        num_iterations = 5,
-        plot_results = TRUE)
-      
-      results_xgbTree <- run_microbiome_model_cv10(
-        physeq_obj = phyloseq_no_new_crates,
-        group_var = "cap_wild_crate",
-        method = "xgbTree",
-        p = 0.75, seed = 241, cv_folds = 4,
-        num_iterations = 5,
-        plot_results = TRUE)
-      
-      rf_df <- extract_metrics(results_rf, "Random Forest", id = clean_id)
-      xgbTree_df <- extract_metrics(results_xgbTree, "xgbTree", id = clean_id)
-      
-      # Combine and plot metrics
-      all_metrics <- bind_rows(rf_df, xgbTree_df)
-      metrics_long <- all_metrics %>%
-        pivot_longer(cols = c(Sensitivity, Specificity, `Balanced Accuracy`),
-                     names_to = "Metric", values_to = "Value")
-      metrics_long$Class <- gsub("\\.\\.", " ", gsub("\\.", " ", metrics_long$Class))
-      
-      write.csv(metrics_long,
-                file = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_mods_no_crates_metrics", clean_id,".csv"),
-                row.names = FALSE)
-      
-      mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Model)) +
-        geom_col(position = position_dodge()) +
-        facet_wrap(~Metric, scales = "free_y") +
-        theme_minimal(base_size = 14) +
-        labs(title = paste0("Model Performances by Parrot Group for QC: ", clean_id),
-             y = "Metric Value", x = "Group") +
-        scale_fill_manual(values = cal_palette("superbloom3")) +
-        theme(
-          axis.text = element_text(face = "bold", size = 14),
-          axis.text.x = element_text(angle = 45, hjust = 1),
-          axis.title = element_text(face = "bold", size = 16),
-          legend.title = element_text(face = "bold", size = 14),
-          legend.text = element_text(face = "bold", size = 12),
-          plot.title = element_text(face = "bold", size = 18, hjust = 0.5)
-        )
-      
-      ggsave(filename = paste0("06.2_qc_group_pred_models/class_no_2samples/compare_models_no_crates", clean_id,".png"),
-             mod_results_compare, height = 15, width = 18)
-      
-      save(results_rf, results_xgbTree,
-           file = paste0("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree", clean_id, ".RData"))
-      
-      plots <- list(
-        rf_conf = results_rf$confusion_plot,
-        rf_imp = results_rf$importance_plot,
-        xgb_conf = results_xgbTree$confusion_plot,
-        xgb_imp = results_xgbTree$importance_plot)
-      
-      for (plot_type in names(plots)) {
-        p <- plots[[plot_type]]
-        if (!is.null(p)) {
-          ggsave(
-            filename = paste0("06.2_qc_group_pred_models/class_no_2samples/", plot_type, "_", clean_id, ".png"),
-            plot = p, width = 8, height = 6, dpi = 300
-          )
-        }
-      }
-    }
-  }
-}
-
-
-### Old below
-# Step 3: Define grouping for merge (e.g., 16n + 16ren)
-
-merge_groups <- list(
-  "phyloseq16n" = c("otu16n", "otu16ren"),
-  "phyloseq18n" = c("otu18n_nohost", "otu18ren_nohost"))
-
-non_merge_groups <- list(
-  "phyloseq16m" = c("otu16m"),
-  "phyloseq18m" = c("otu18m_nohost"))
-
-all_groups <- list(
-  merge = merge_groups,
-  no_merge = non_merge_groups)
-
-# Step 4: Loop over suffix/threshold combos to merge and model
-#suffixes_thresholds <- unique(file_df$suffix_thresh)
-# suffixes_thresholds <- unique(file_df$suffix_thresh)
-for (sfx in suffixes_thresholds) {
-  for (merge_status in names(all_groups)) {
-    group_list <- all_groups[[merge_status]]
-    
-    for (group_name in names(group_list)) {
-      base_parts <- group_list[[group_name]]
-      
-      # Get matching files
-      matching_paths <- file_df %>%
-        filter(base %in% base_parts, suffix_thresh == sfx) %>%
-        arrange(base)
-      
-      # Skip if necessary parts not found
-      if (merge_status == "merge" && nrow(matching_paths) < 2) {
-        message("Skipping ", group_name, "_", sfx, " (not all parts found)")
-        next
-      }
-      if (merge_status == "no_merge" && nrow(matching_paths) < 1) {
-        message("Skipping ", group_name, "_", sfx, " (file not found)")
-        next
-      }
-      
-      # Load phyloseq objects
-      phylo_objs <- lapply(matching_paths$path, function(path) {
-        env <- new.env()
-        obj_name <- load(path, envir = env)
-        env[[obj_name]]
-      })
-      
-      # Merge if needed, or use single object
-      ps_merged <- if (merge_status == "merge") {
-        do.call(merge_phyloseq, phylo_objs)
-      } else {
-        phylo_objs[[1]]
-      }
-      
-      clean_id <- paste0(group_name, "_", sfx)
-    
-    # ** Combine Crate Data into one **
-    sample_df <- as.data.frame(sample_data(ps_merged))
-    
-    # Create new variable with recoded values
-    sample_df$cap_wild_crate <- as.character(sample_df$Captive.Wild)
-    sample_df$cap_wild_crate[sample_df$Captive.Wild %in% c("Crate 1: Unknown origin", 
-                                                           "Crate 2: Unknown origin")] <- "New crates"
-    # factor with levels
-    sample_df$cap_wild_crate <- factor(sample_df$cap_wild_crate,
-                                       levels = c("Captive", 
-                                                  "Wild, free ranging", 
-                                                  "Wild, seized from traffickers", 
-                                                  "New crates"))
-    # Replace with updated data
-    sample_data(ps_merged) <- sample_data(sample_df)
-    levels(sample_data(ps_merged)$cap_wild_crate)
-    
-    # Check for required variable
-    if (!"cap_wild_crate" %in% colnames(sample_data(ps_merged))) {
-      message("Skipping ", clean_id, " - missing 'cap_wild_crate'")
-      next
-    }
-    
-    # Create new phyloseq object without "New crates"
-    phyloseq_no_new_crates <- subset_samples(ps_merged, cap_wild_crate != "New crates")
-    levels(sample_data(phyloseq_no_new_crates)$cap_wild_crate)
-    
-    # Run models
-    cat("Running models for:", clean_id, "\n")
-    
-    # Options for model inputs : 
-    model_options <- modelLookup() %>% filter(forClass == TRUE)
-    
-    results_rf <- run_microbiome_model(
-      physeq_obj = phyloseq_no_new_crates,
-      group_var = "cap_wild_crate",
-      method = "rf",
-      p = 0.75, seed = 241, cv_folds = 4,
-      plot_results = TRUE)
-    
-    results_xgbTree <- run_microbiome_model(
-      physeq_obj = phyloseq_no_new_crates,
-      group_var = "cap_wild_crate",
-      method = "xgbTree",
-      p = 0.75, seed = 241, cv_folds = 4,
-      plot_results = TRUE)
-    
-    ### Plot and compare models 
-    
-    # Step 1: Extract and format the metrics from each model
-    extract_metrics <- function(model_result, model_name) {
-      metrics <- model_result$confusion_matrix$byClass[, c("Sensitivity", "Specificity", "Balanced Accuracy")]
-      metrics_df <- as.data.frame(metrics)
-      metrics_df$Class <- rownames(metrics_df)
-      metrics_df$Model <- model_name
-      return(metrics_df)
-    }
-    
-    # Extract metrics from all models
-    rf_df       <- extract_metrics(results_rf, "Random Forest")
-    pcaNNet_df  <- extract_metrics(results_pcaNNet, "pcaNNet")
-    xgbTree_df  <- extract_metrics(results_xgbTree, "xgbTree")
-    
-    # Combine all into df and make long
-    all_metrics <- bind_rows(rf_df, pcaNNet_df, xgbTree_df)
-    metrics_long <- all_metrics %>%
-                   pivot_longer(cols = c(Sensitivity, Specificity, `Balanced Accuracy`),
-                   names_to = "Metric", values_to = "Value")
-    metrics_long$Class <- gsub("\\.\\.", " ", 
-                               gsub("\\.", " ", metrics_long$Class)) # clean label
-    
-    write.csv(metrics_long,
-              file = paste0("06.2_qc_group_pred_models/compare_mods_no_crates_metrics", clean_id,".csv"),
-              row.names = FALSE)
-    
-    mod_results_compare <- ggplot(metrics_long, aes(x = Class, y = Value, fill = Model)) +
-      geom_col(position = position_dodge()) +
-      facet_wrap(~Metric, scales = "free_y") +
-      theme_minimal(base_size = 14, base_family = "") +  # Increase base font size
-      labs(title = paste0("Model Performances by Parrot Group for QC: ", clean_id),
-           y = "Metric Value", x = "Group") +
-      scale_fill_manual(values = cal_palette("superbloom3")) +
-      theme(
-        plot.background = element_rect(fill = "white", color = NA),  # White background
-        panel.background = element_rect(fill = "white", color = NA), 
-        strip.background = element_rect(fill = "white"),
-        strip.text = element_text(face = "bold", size = 16),      
-        axis.text = element_text(face = "bold", size = 14),
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title = element_text(face = "bold", size = 16),
-        legend.title = element_text(face = "bold", size = 14),
-        legend.text = element_text(face = "bold", size = 12),
-        plot.title = element_text(face = "bold", size = 18, hjust = 0.5))
-    
-    ggsave(filename = paste0("06.2_qc_group_pred_models/compare_models_no_crates", clean_id,".png"),
-           mod_results_compare, height=15, width=18)
-    
-    m16_all_plot <- ggplot(m16_all, aes(x = ID, y = `Balanced Accuracy`, fill = Class)) +
-      geom_col(position = "dodge") +
-      scale_fill_manual(values = cal_palette("superbloom3")) +
-      facet_wrap(~ Model, scales = "free_x") +
-      theme_minimal(base_size = 14) +
-      labs(title = "Balanced Accuracy Comparison for 16m",
-           y = "Balanced Accuracy", x = "Processing Type") +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    
-    # Save models
-    save(results_rf, results_pcaNNet, results_xgbTree,
-         file = paste0("06.2_qc_group_pred_models/models_rf_pcannet_xgbtree", clean_id, ".RData"))
-    
-    # Save RF Plots 
-    ggsave(filename = paste0("06.2_qc_group_pred_models/rf_confusion_plot_", clean_id, ".png"),
-           plot = results_rf$confusion_plot, width = 8, height = 6, dpi = 300)
-    
-    ggsave(filename = paste0("06.2_qc_group_pred_models/rf_importance_plot_", clean_id, ".png"),
-           plot = results_rf$importance_plot, width = 8, height = 6, dpi = 300)
-    
-    # Save pcaNNet plots
-    ggsave(filename = paste0("06.2_qc_group_pred_models/pcannet_confusion_plot_", clean_id, ".png"),
-           plot = results_pcaNNet$confusion_plot, width = 8, height = 6, dpi = 300)
-    
-    ggsave(filename = paste0("06.2_qc_group_pred_models/pcannet_importance_plot_", clean_id, ".png"),
-           plot = results_pcaNNet$importance_plot, width = 8, height = 6, dpi = 300)
-    
-    # Save xgbTree plots
-    ggsave(filename = paste0("06.2_qc_group_pred_models/xgbtree_confusion_plot_", clean_id, ".png"),
-           plot = results_xgbTree$confusion_plot, width = 8, height = 6, dpi = 300)
-    
-    ggsave(filename = paste0("06.2_qc_group_pred_models/xgbtree_importance_plot_", clean_id, ".png"),
-           plot = results_xgbTree$importance_plot, width = 8, height = 6, dpi = 300)
-    
-    # Save plots
-    plots <- list(
-      rf_conf = results_rf$confusion_plot,
-      rf_imp = results_rf$importance_plot,
-      pca_conf = results_pcaNNet$confusion_plot,
-      pca_imp = results_pcaNNet$importance_plot,
-      xgb_conf = results_xgbTree$confusion_plot,
-      xgb_imp = results_xgbTree$importance_plot)
-    
-    for (plot_type in names(plots)) {
-      p <- plots[[plot_type]]
-      if (!is.null(p)) {
-        ggsave(
-          filename = paste0("06.2_qc_group_pred_models/", plot_type, "_", clean_id, ".png"),
-          plot = p, width = 8, height = 6, dpi = 300
-        )
-      }
-    }
-  }
-}}
-# 
-
-
-
-# 1. List all relevant CSV files in the directory
-file_paths <- list.files(path = "06.2_qc_group_pred_models", 
-                         pattern = "*.csv", full.names = TRUE)
-file_paths <- Sys.glob("06.2_qc_group_pred_models/*.csv")
-
-# 2. Function to read a CSV and calculate mean Balanced Accuracy
-get_mean_balanced_accuracy <- function(file) {
-  tryCatch({
-    df <- read_csv(file, show_col_types = FALSE)
-    # Ensure required columns exist
-    if (!all(c("Metric", "Value") %in% colnames(df))) {
-      warning(paste("Skipping file (missing required columns):", file))
-      return(NULL)
-    }
-    # Filter for Balanced Accuracy rows
-    balanced_acc <- df %>%
-      dplyr::filter(Metric == "Balanced Accuracy") %>%
-      dplyr::mutate(ID = gsub("_", " ", ID))
-    
-    # If no such rows, skip
-    if (nrow(balanced_acc) == 0) {
-      warning(paste("No Balanced Accuracy entries in:", file))
-      return(NULL)
-    }
-    
-    # Calculate stats
-    mean_acc <- mean(balanced_acc$Value, na.rm = TRUE)
-    sd_acc <- sd(balanced_acc$Value, na.rm = TRUE)
-    se_acc <- sd_acc / sqrt(nrow(balanced_acc))  # optional
-    
-    # Extract clean name
-    file_name <- sub("compare_mods_no_crates_metricsphyloseq", "",
-                     tools::file_path_sans_ext(basename(file)))
-    
-    return(data.frame(File = file_name,
-                      MeanBalancedAccuracy = mean_acc,
-                      SD = sd_acc,
-                      SE = se_acc))
-  }, error = function(e) {
-    warning(paste("Error in file:", file, "\n", e$message))
-    return(NULL)
-  })
-}
-
-get_mean_balanced_accuracy <- function(file) {
-  tryCatch({
-    df <- read_csv(file, show_col_types = FALSE)
-    
-    # Ensure required columns exist
-    if (!all(c("Metric", "Value", "Model") %in% colnames(df))) {
-      warning(paste("Skipping file (missing required columns):", file))
-      return(NULL)
-    }
-    
-    # Filter for Balanced Accuracy
-    balanced_acc <- df %>%
-      dplyr::filter(Metric == "Balanced Accuracy") %>%
-      dplyr::mutate(ID = gsub("_", " ", ID))
-    
-    if (nrow(balanced_acc) == 0) {
-      warning(paste("No Balanced Accuracy entries in:", file))
-      return(NULL)
-    }
-    
-    # Extract a clean file identifier
-    file_name <- sub("compare_mods_no_crates_metricsphyloseq", "",
-                     tools::file_path_sans_ext(basename(file)))
-    
-    # Group by model and compute stats
-    summary_stats <- balanced_acc %>%
-      dplyr::group_by(Model) %>%
-      dplyr::summarise(
-        MeanBalancedAccuracy = mean(Value, na.rm = TRUE),
-        SD = sd(Value, na.rm = TRUE),
-        SE = SD / sqrt(n()),
-        .groups = "drop"
-      ) %>%
-      dplyr::mutate(File = file_name)
-    
-    return(summary_stats)
-    
-  }, error = function(e) {
-    warning(paste("Error in file:", file, "\n", e$message))
-    return(NULL)
-  })
-}
-
-
-# 3. Apply the function to all files
-results <- lapply(file_paths, 
-                  get_mean_balanced_accuracy) %>%
-                  bind_rows() %>% 
-  dplyr::mutate(File = gsub("_", " ", File))
-
-# 4. Sort results from highest to lowest
-results_sorted <- results %>%
-  arrange(desc(MeanBalancedAccuracy)) %>% 
-  dplyr::mutate(File = gsub("_", " ", File))
 
 # 5. Plot
-accuracy <- ggplot(results, aes(x = reorder(File, -MeanBalancedAccuracy), 
-                    y = MeanBalancedAccuracy,
+accuracy <- ggplot(results_summary, aes(x = reorder(ID, -mean_val), 
+                    y = mean_val,
                     fill = Model)) +
   geom_col(position = position_dodge(width = 0.9), width = 0.7) +
-  geom_errorbar(aes(ymin = MeanBalancedAccuracy - SE, 
-                    ymax = MeanBalancedAccuracy + SE),
+  geom_errorbar(aes(ymin = mean_val - se_val, 
+                    ymax = mean_val + se_val),
                 position = position_dodge(width = 0.9),
                 width = 0.2, color = "black") +
   scale_fill_manual(values = c(
     "Random Forest" = "#3f77b4",
-    "XGBoost" = "#bf6f0e")) +
+    "xgbTree" = "#bf6f0e")) +
   theme_minimal() +
   labs(title = "Mean Balanced Accuracy by Model and File",
        x = "Model Run (File)",
@@ -892,8 +525,44 @@ accuracy <- ggplot(results, aes(x = reorder(File, -MeanBalancedAccuracy),
        fill = "Model") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave(filename = paste0("06.2_qc_group_pred_models/RF_XGBTREE_accuracy_overall_10_fold.png"),
+ggsave(filename = paste0("06.2_qc_group_pred_models/class_no_2samples/RF_XGBTREE_accuracy_overall.png"),
        accuracy, height=15, width=18)
+
+balanced_df <- all_metrics %>%
+  filter(Metric == "Balanced Accuracy")
+
+ggplot(balanced_df, aes(x = ID, y = Value, fill = Model)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  facet_wrap(~Class) +
+  scale_fill_manual(values = c("Random Forest" = "#3f77b4", "xgbTree" = "#bf6f0e")) +
+  theme_minimal() +
+  labs(title = "Balanced Accuracy by Model and Class",
+       x = "Run (ID)",
+       y = "Balanced Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(balanced_df, aes(x = ID, y = Model, fill = Value)) +
+  geom_tile(color = "white") +
+  facet_wrap(~Class) +
+  scale_fill_viridis_c(option = "C", direction = -1) +
+  theme_minimal() +
+  labs(title = "Heatmap of Balanced Accuracy",
+       x = "Run (ID)",
+       y = "Model",
+       fill = "Balanced Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+library(ggpubr)
+ggboxplot(filter(all_metrics, Metric == "Balanced Accuracy"),
+          x = "Model", y = "Value",
+          color = "Model", palette = "jco",
+          add = "jitter") +
+  stat_compare_means(paired = TRUE, method = "t.test") +
+  facet_wrap(~Class)
+
+
+load("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree_m16_20_thr10.RData")
+
 
 # Now faceting plots by RF, xgbTREE, 16, 18, m and n
 
