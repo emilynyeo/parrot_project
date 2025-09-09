@@ -561,7 +561,7 @@ ggboxplot(filter(all_metrics, Metric == "Balanced Accuracy"),
   facet_wrap(~Class)
 
 
-load("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree_m16_20_thr10.RData")
+load("06.2_qc_group_pred_models/class_no_2samples/models_rf_xgbtree_n16_20_thr10.RData")
 
 
 # Now faceting plots by RF, xgbTREE, 16, 18, m and n

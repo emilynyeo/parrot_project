@@ -58,14 +58,14 @@ tax_levels <- c("Species", "Genus", "Family")
 lda_diff_results_2 <- list()
 set.seed(1024)
 for (taxrank in tax_levels) {
-  lda_diff_results[[taxrank]] <- list()
+  lda_diff_results_2[[taxrank]] <- list()
   for (name in names(phyloseq_list)) {
     ps_raw <- phyloseq_list[[name]]
     ps_agglom <- tax_glom(ps_raw, taxrank = taxrank)# Agglomerate to taxa level
     
     # Run diff_analysis
     result <- diff_analysis(obj = ps_agglom,
-                            classgroup = "Captive.Wild",
+                            classgroup = "captive_wild",
                             mlfun = "lda",
                             filtermod = "pvalue",
                             firstcomfun = "kruskal_test",
@@ -75,11 +75,12 @@ for (taxrank in tax_levels) {
                             subclmin = 3,
                             subclwilc = TRUE,
                             secondalpha = 0.001,
-                            ldascore = 4)
+                            ldascore = 3)
     lda_diff_results_2[[taxrank]][[name]] <- result
   }
 }
 
+save(lda_diff_results_2, file = "05_taxa_driving_groups/LDA/lda3_16m_16n_18m_18n.RData")
 dim(lda_diff_results_2$Species$phyloseq16m@result)
 
 # Initialize a list to store the plots (optional)
