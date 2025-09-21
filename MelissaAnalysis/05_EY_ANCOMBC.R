@@ -106,7 +106,7 @@ for (dataset_name in names(anc_results)) {
 
 
 # Optional: Save the trimmed version
-save(anc_results_trimmed, file = "05_taxa_driving_groups/ancom_16m_16n_18m_trimmed.RData")
+save(anc_results_trimmed, file = "05_taxa_driving_groups/ancom_16m_16n_18m_18m_trimmed.RData")
 rm(anc_results)
 
 # Loop through datasets and taxonomic levels
@@ -170,8 +170,8 @@ for (dataset_name in names(anc_results_trimmed)) {
       labs(title = paste("Significant DA (ANCOMBC2):", dataset_name, "-", tax_level),
            x = "Taxon", y = "Log Fold Change", fill = "Group") +
       scale_fill_manual(
-        values = c("Captive" = "#00AED7", "Wild" = "seagreen",
-                   "Seized" = "purple4")) +
+        values = c("Captive" = "#00AED7", "Wild" = "#FD9347",
+                   "Seized" = "seagreen")) +
       theme_bw(base_size = 14) +
       theme(plot.title = element_text(size = 16, face = "bold"),
         axis.title = element_text(size = 14),

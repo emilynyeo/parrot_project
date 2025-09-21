@@ -1,0 +1,497 @@
+---
+title: "paper_figures"
+author: "Emily Yeo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    fig_width: 12
+    fig_height: 8
+    df_print: paged
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#### Load libraries ####
+pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
+               MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
+               UpSetR, gridExtra, grid, WGCNA, ggpubr)
+source("utils.R")
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
+```
+
+### Load data
+
+```{r load data}
+load("01.1_qc_checks/phyloseq_otu16m_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu16n_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18m_nohost_mat_filt_20_thr10.rds")
+load("01.1_qc_checks/phyloseq_otu18n_nohost_mat_filt_20_thr10.rds")
+
+# format data
+phyloseq16m <- prune_samples(sample_sums(phyloseq_otu16m_mat_filt_20_thr10) >0, phyloseq_otu16m_mat_filt_20_thr10)
+phyloseq16n <- prune_samples(sample_sums(phyloseq_otu16n_mat_filt_20_thr10) >0, phyloseq_otu16n_mat_filt_20_thr10)
+phyloseq18m <- prune_samples(sample_sums(phyloseq_otu18m_nohost_mat_filt_20_thr10) >0, phyloseq_otu18m_nohost_mat_filt_20_thr10)
+phyloseq18n <- prune_samples(sample_sums(phyloseq_otu18n_nohost_mat_filt_20_thr10) >0, phyloseq_otu18n_nohost_mat_filt_20_thr10)
+
+rm(phyloseq_otu16m_mat_filt_20_thr10, phyloseq_otu16n_mat_filt_20_thr10,
+   phyloseq_otu18m_nohost_mat_filt_20_thr10, phyloseq_otu18n_nohost_mat_filt_20_thr10)
+
+phyloseq_list <- list(
+  phyloseq16m = phyloseq16m,
+  phyloseq16n = phyloseq16n,
+  phyloseq18m = phyloseq18m,
+  phyloseq18n = phyloseq18n)
+
+# rename wild cap groups 
+for (i in seq_along(phyloseq_list)) {
+  phy <- phyloseq_list[[i]]
+  sd <- as.data.frame(sample_data(phy))
+  sd$captive_wild <- factor(sd$Captive.Wild,
+                            levels = c("Captive", "Wild, free ranging", "Wild, seized from traffickers"),
+                            labels = c("Captive", "Wild", "Seized"))
+  
+  sd$captive_wild_pro <- ifelse(sd$captive_wild == "Seized" & sd$Given.probiotic == "Yes", "Seized Probiotics",
+                         ifelse(sd$captive_wild == "Seized" & sd$Given.probiotic != "Yes", "Seized No Probiotics", 
+                         as.character(sd$captive_wild)))
+
+  sample_data(phy) <- sample_data(sd)
+  phyloseq_list[[i]] <- phy
+}
+rm(phyloseq16m, phyloseq16n, phyloseq18m, phyloseq18n, phy)
+```
+
+### Set plot themes and colors for throughout 
+
+```{r}
+colors <- c("#493D9E","#5D8233","#ECD662")
+colorlist <- c(
+      "Captive" = "#493D9E",
+      "Wild" = "#5D8233",
+      "Seized" = "#ECD662")
+
+all_theme <- c(axis.text.y = element_text(size = 12),
+      axis.text.x = element_text(size = 12),
+      panel.grid.major.y = element_line(color = "grey", linewidth=0.2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      legend.title = element_text(size = 10),
+      legend.text = element_text(size = 8),
+      strip.background = element_rect(colour = NA, fill = "grey"),
+      plot.margin = ggplot2::margin(1, 1, 1, 1, unit = "cm"))
+```
+
+### Alpha D and Read Depth 
+
+```{r Alpha D and Read Depth, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# ALPHA D and READ DEPTH
+
+# set.seed(1024)
+# 
+# # Loop through phyloseq list
+# rarecurve_plots <- lapply(names(phyloseq_list), function(name) {
+#   ps <- phyloseq_list[[name]]
+#   ps <- phyloseq_list[["phyloseq16m"]]
+#   # Generate rarefaction result
+#   rareres <- get_rarecurve(obj = ps, chunks = 200)
+# 
+#   # First rarefaction plot
+#   prare1 <- ggrarecurve(obj = rareres,
+#                         factorNames = "captive_wild",
+#                         indexNames = c("Observe", "Chao1", "ACE")) +
+#     scale_fill_manual(values = c("#00AED7", "#FD9347", "seagreen", "purple4")) +
+#     scale_color_manual(values = c("#00AED7", "#FD9347", "seagreen", "purple4")) +
+#     theme_bw() +
+#     theme(
+#       axis.text = element_text(size = 8),
+#       panel.grid = element_blank(),
+#       strip.background = element_rect(colour = NA, fill = "grey"),
+#       strip.text.x = element_text(face = "bold")
+#     )
+# 
+#   # Second rarefaction plot
+#   prare2 <- ggrarecurve(obj = rareres,
+#                         factorNames = "captive_wild",
+#                         shadow = FALSE,
+#                         indexNames = c("Observe", "Chao1", "ACE")) +
+#     scale_color_manual(values = c("#00AED7", "#FD9347", "seagreen", "purple4")) +
+#     coord_cartesian(ylim = c(0, 400)) +
+#     theme_bw() +
+#     theme(
+#       axis.text = element_text(size = 8),
+#       panel.grid = element_blank(),
+#       strip.background = element_rect(colour = NA, fill = "grey"),
+#       strip.text.x = element_text(face = "bold"))
+# 
+#   # Return a list of the two plots
+#   list(rare1 = prare1, rare2 = prare2)
+# })
+# 
+# # Assign names to the output list for easy reference
+# names(rarecurve_plots) <- names(phyloseq_list)
+# rarecurve_plots$phyloseq16n$rare1
+```
+
+### Alpha Diversity 
+
+```{r alpha D}
+# Define the pairs to compare
+my_comparisons <- list(
+  c("Captive", "Wild"),
+  c("Captive", "Seized Probiotics"),
+  c("Wild", "Seized Probiotics"),
+  c("Captive", "Seized No Probiotics"),
+  c("Wild", "Seized No Probiotics"),
+  c("Seized Probiotics", "Seized No Probiotics"))
+
+# Placeholder to store plots
+alpha_plots <- lapply(names(phyloseq_list), function(name) {
+  
+  phy <- phyloseq_list[[name]]
+  GP <- prune_taxa(taxa_sums(phy) > 0, phy) # Prune zero abundance taxa
+  
+  alpha <- plot_richness(GP, x = "captive_wild_pro", 
+                         color = "captive_wild_pro",
+                         measures = c("Chao1", "Shannon", "Simpson")) +
+    geom_boxplot(size = 1, alpha = 0.5) +
+    scale_color_manual(values = c("#493D9E", "#EAD672", "#EFC650", "#5D8233")) +
+    theme_bw() +
+    theme(axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          plot.caption = element_text(size = 9, hjust = 1)) +
+    stat_compare_means(
+      comparisons = my_comparisons,
+      method = "t.test",
+      label = "p.signif",
+      size = 3) +
+    labs(title = paste("Alpha Diversity for: ", name), 
+         caption = "Significance (t-test):  ns: p > 0.05   *: p ≤ 0.05   **: p ≤ 0.01   ***: p ≤ 0.001   ****: p ≤ 0.0001")
+  
+  return(alpha)
+})
+
+# Optional: print all plots
+#for (p in alpha_plots) {
+#  print(p)
+#}
+
+wrap_plots(alpha_plots, nrow = 2, ncol = 2)
+```
+
+### ANCOMBC
+
+```{r ancombc-grid, fig.width=25, fig.height=25}
+# Loaded ancombc results from the 05_EY_ANCOMBC.R script 
+load("05_taxa_driving_groups/ancom_16m_16n_18m_18m_trimmed.RData")
+
+# Loop through datasets and taxonomic levels
+ancombc_plots <- list()
+for (dataset_name in names(anc_results_trimmed)) {
+  for (tax_level in names(anc_results_trimmed[[dataset_name]])) {
+    
+    #cat("Fetching ancom results for:", dataset_name, "at", tax_level, "\n")
+    res_obj <- anc_results_trimmed[[dataset_name]][[tax_level]]
+    
+    # Check if result object contains `res` element
+    if (!"res" %in% names(res_obj)) {
+      warning(paste("No 'res' in", dataset_name, tax_level))
+      next
+    }
+    res_df <- res_obj$res
+    res_df <- res_df %>% 
+              dplyr::filter(`q_(Intercept)` < 0.05)
+    #cat("res_df size:", format(object.size(res_df), units = "MB"), "\n")
+    
+    # Check for valid results
+    if (nrow(res_df) == 0) next
+    
+    # Reshape the lfc, q, and diff values separately
+    lfc_df <- res_df %>%
+      dplyr::select(taxon, starts_with("lfc_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "lfc") %>%
+      dplyr::mutate(group = sub("lfc_", "", group))
+    
+    q_df <- res_df %>%
+      dplyr::select(taxon, starts_with("q_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "q") %>%
+      dplyr::mutate(group = sub("q_", "", group))
+    
+    diff_df <- res_df %>%
+      dplyr::select(taxon, starts_with("diff_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "diff") %>%
+      dplyr::mutate(group = sub("diff_", "", group))
+    
+    # Join all into a single long-form dataframe
+    plot_df <- reduce(list(lfc_df, q_df, diff_df), 
+                      left_join, by = c("taxon", "group"))
+    
+    # Filter significant results
+    plot_df <- plot_df %>% filter(diff == TRUE, q < 0.05)
+    
+    if (nrow(plot_df) == 0) next  # Skip if no significant taxa
+    
+    # Clean and format for plotting
+    plot_df$group <- str_replace_all(plot_df$group, "captive_wild", "")
+    plot_df$taxon <- gsub("_", " ", plot_df$taxon)
+    plot_df <- plot_df %>%
+      dplyr::mutate(group = ifelse(group == "(Intercept)", "Captive", group)) 
+    plot_df$group <- sub("^Captive\\.", "", plot_df$group)
+    plot_df$group <- sub("WildWild", "Wild", plot_df$group)
+    
+    #cat("plot_df size:", format(object.size(plot_df), units = "MB"), "\n")
+    
+    # Create plot
+    p <- ggplot(plot_df, aes(x = reorder(taxon, lfc), y = lfc, fill = group)) +
+      geom_col(position = position_dodge(width = 0.9)) +
+      coord_flip() +
+      labs(title = paste("Significant DA (ANCOMBC2):", dataset_name, "-", tax_level),
+           x = "Taxon", y = "Log Fold Change", fill = "Group") +
+      scale_fill_manual(
+        values = c("Captive" = "#493D9E", 
+                   "Wild" = "#EAD672",
+                   "Seized" = "#5D8233")) +
+      theme_bw(base_size = 12) +
+      theme(plot.title = element_text(size = 12, face = "bold"),
+        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 10))
+    
+    ancombc_plots[[dataset_name]][[tax_level]] <- p
+    
+    # Define output file name
+    output_dir <- "05_taxa_driving_groups"
+    plot_file <- file.path(output_dir, 
+                           paste0(dataset_name, "_ancombc_all_", tolower(tax_level), ".png"))
+    ggsave(filename = plot_file, plot = p, height = 15, width = 18)
+  }
+}
+
+library(patchwork)
+
+p1 <- ancombc_plots$phyloseq16m$family
+p2 <- ancombc_plots$phyloseq16m$genus + theme(legend.position = "none")
+p3 <- ancombc_plots$phyloseq16m$species + theme(legend.position = "none")
+p4 <- ancombc_plots$phyloseq16n$family
+p5 <- ancombc_plots$phyloseq16n$genus + theme(legend.position = "none")
+p6 <- ancombc_plots$phyloseq16n$species + theme(legend.position = "none")
+p7 <- ancombc_plots$phyloseq18m$family
+p8 <- ancombc_plots$phyloseq18m$genus + theme(legend.position = "none")
+p9 <- ancombc_plots$phyloseq18m$species + theme(legend.position = "none")
+p10 <- ancombc_plots$phyloseq18n$family
+p11 <- ancombc_plots$phyloseq18n$genus + theme(legend.position = "none")
+p12 <- ancombc_plots$phyloseq18n$species + theme(legend.position = "none")
+
+# Group plots into rows
+row1 <- p1 | p2 | p3
+row2 <- p4 | p5 | p6
+row3 <- p7 | p8 | p9
+row4 <- p10 | p11 | p12
+rm(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12)
+
+# Combine rows and control relative height
+(row1 / row2 / row3 / row4) + 
+  plot_layout(heights = c(4.5, 4.5, 2.5, 1)) &
+  theme(plot.margin = margin(t = 10, r = 10, b = 10, l = 10))
+```
+
+
+### ANCOMBC VENN DIAGRAMS 
+
+```{r Ancombc VEnn Diagrams, message=FALSE, warning=FALSE}
+# Define your datasets
+datasets <- c("phyloseq16m", "phyloseq16n", "phyloseq18m", "phyloseq18n")
+levels <- c("family", "genus", "species")
+venn_plots_anc_levels <- list()
+
+for (level in levels) {
+  venn_plots_anc_levels[[level]] <- process_tax_level(level, datasets)
+}
+
+grobs <- lapply(venn_plots_anc_levels, function(x) {
+ grid.grabExpr(grid.draw(x[[1]]))
+})
+
+grobs_margined <- lapply(grobs, function(g) {
+  grobTree(g, vp = viewport(width = 0.7, height = 0.4))
+})
+
+grid.arrange(grobs = grobs_margined, ncol = 3,
+             top = textGrob("ANCOMBC Feature Overlaps", gp = gpar(fontsize = 16, fontface = "bold")))
+```
+
+
+### LDA 
+
+```{r LDA, message=FALSE, warning=FALSE}
+# load lda results from the 05_ET_LDA.R script 
+load("05_taxa_driving_groups/LDA/lda4_16m_16n_18m_18n.RData")
+
+# Initialize a list to store the plots (optional)
+diffbox_plots <- list()
+for (taxrank in names(lda_diff_results_2)) { # (Species, Genus, Family)
+  for (dataset in names(lda_diff_results_2[[taxrank]])) {
+    deres <- lda_diff_results_2[[taxrank]][[dataset]]
+    
+    # Select top 30 features by LDAmean
+    top30_feat <- deres@result %>%
+      arrange(desc(LDAmean)) %>%
+      slice_head(n = 30) %>%
+      pull(f)
+    
+    # Create a new object containing only the top 30 features
+    deres_top30 <- deres
+    deres_top30@result <- deres@result %>%
+      filter(f %in% top30_feat)
+    #deres_top30@result$f <- gsub("__", ": ", deres_top30@result$f)
+    deres_top30@result$label <- gsub("__", ": ", deres_top30@result$f)
+    
+    diffbox <- ggdiffbox(
+      obj = deres_top30,
+      box_notch = FALSE,
+      lineheight = 0.1,
+      linewidth = 0.3,
+      colorlist = colorlist,
+      l_xlabtext = "Relative Abundance"
+    )
+    # Optional: relabel facets or axes after plot is created
+    diffbox <- diffbox + scale_y_discrete(labels = deres_top30@result$label)
+    
+    # Save or store the plot
+    plot_name <- paste0("diffbox_", taxrank, "_", dataset)
+    diffbox_plots[[taxrank]][[dataset]] <- diffbox
+    
+    # Optionally: Print or save plot
+    #print(diffbox)
+    ggsave(paste0("05_taxa_driving_groups/LDA/", plot_name, ".png"), 
+           diffbox, width = 8, height = 6, dpi = 300)
+  }
+}
+
+all_lda_plots <- unlist(diffbox_plots, recursive = FALSE)
+species <- all_lda_plots[1:4]
+genus <- all_lda_plots[5:8]
+family <- all_lda_plots[9:12]
+```
+
+### Family level LDA
+```{r}
+wrap_plots(family, nrow = 2, ncol = 2) 
+```
+
+### Genus level LDA 
+
+```{r}
+wrap_plots(genus, nrow = 2, ncol = 2)
+```
+
+### Species level LDA 
+
+```{r}
+wrap_plots(species, nrow = 2, ncol = 2)
+```
+
+
+## Combined ANCOMBC LDA plots 
+
+```{r}
+#### Taxa overlap
+strip_prefix <- function(x) sub("^[a-z]__+", "", x)
+lda_diff_results_2[["Genus"]]$phyloseq16n@result$f <- strip_prefix(lda_diff_results_2[["Genus"]]$phyloseq16n@result$f)
+
+lda_genus_16n_feature_list <- unique(lda_diff_results_2[["Genus"]]$phyloseq16n@result$f) %>% as.character()
+anc_genus_16n_feature_list <- unique(ancombc_plots[["phyloseq16n"]]$genus$data$taxon) %>% as.character()
+
+# Find overlap
+overlap <- intersect(lda_genus_16n_feature_list, anc_genus_16n_feature_list)
+print(overlap)
+
+unique_to_ancombc <- setdiff(anc_genus_16n_feature_list, overlap)
+unique_to_lda <- setdiff(lda_genus_16n_feature_list, overlap)
+
+ordered_features_ancombc <- c(overlap, unique_to_ancombc)
+ordered_features_all <- c(overlap, unique_to_ancombc, unique_to_lda)
+
+# Plot p1 
+lda_genus_16n <- lda_diff_results_2[["Genus"]]$phyloseq16n
+# Replace only column names
+colnames(lda_genus_16n@originalD) <- strip_prefix(colnames(lda_genus_16n@originalD))
+
+p1 <- make_p1_boxplot(
+  obj = lda_genus_16n,
+  featurelist = ordered_features_all,
+  colorlist = colorlist,
+  box_notch = FALSE,
+  xlabtext = "Relative Abundance")
+p1
+
+p1_ord <- make_p1_boxplot_ordered(
+  obj = lda_genus_16n,
+  featurelist = ordered_features_all,
+  colorlist = colorlist,
+  box_notch = FALSE,
+  xlabtext = "Relative Abundance")
+
+p1_ord
+
+# Plot effect size (p2)
+# Add missing rows to nodedfres_all (for p2):
+
+# Fill missing features for effect size plot with NA
+nodedfres_all <- lda_genus_16n@result
+missing_in_p2 <- setdiff(ordered_features_all, nodedfres_all$f)
+if (length(missing_in_p2) > 0) {
+  na_rows <- data.frame(f = missing_in_p2)
+  # Fill other columns with NA or suitable values
+  na_rows[, setdiff(colnames(nodedfres_all), "f")] <- NA
+  nodedfres_all <- rbind(nodedfres_all, na_rows)
+}
+# Reorder levels to match p1
+nodedfres_all$f <- factor(nodedfres_all$f, levels = rev(ordered_features_all))
+
+p2 <- make_p2_effectsize(obj = lda_genus_16n, 
+                         nodedfres = nodedfres_all, 
+                         colorlist = colorlist, 
+                         xlim_range = c(2.5, 5.5))
+
+p2 <- p2 + theme(axis.text.y = element_blank(),
+                 axis.ticks.y = element_blank())
+p2
+# Plot p3 ancombc 
+
+# Add missing rows to anc_plot_dfs[["phyloseq16n"]]$genus (for p3):
+
+anc_df <- ancombc_plots[["phyloseq16n"]]$genus[["data"]]
+
+missing_in_p3 <- setdiff(ordered_features_all, anc_df$taxon)
+if (length(missing_in_p3) > 0) {
+  na_rows <- data.frame(taxon = missing_in_p3)
+  na_rows[, setdiff(colnames(anc_df), "taxon")] <- NA
+  anc_df <- rbind(anc_df, na_rows)
+}
+
+anc_df$taxon <- factor(anc_df$taxon, levels = rev(ordered_features_all))
+
+p3 <- make_p3_ancombc(ancombc_df = anc_df, 
+                      dataset_name = "16N",
+                      tax_level = "Genus", 
+                      featurelist = ordered_features_all,
+                      colorlist = colorlist)
+
+p3 <- p3 + theme(axis.text.y = element_blank(),
+                 axis.ticks.y = element_blank(),
+                 plot.title = element_blank())
+
+p3
+
+p1 | p2 | p3 
+
+```
+
+
+
+
+

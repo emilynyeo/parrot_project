@@ -75,12 +75,12 @@ for (taxrank in tax_levels) {
                             subclmin = 3,
                             subclwilc = TRUE,
                             secondalpha = 0.001,
-                            ldascore = 3)
+                            ldascore = 4)
     lda_diff_results_2[[taxrank]][[name]] <- result
   }
 }
 
-save(lda_diff_results_2, file = "05_taxa_driving_groups/LDA/lda3_16m_16n_18m_18n.RData")
+save(lda_diff_results_2, file = "05_taxa_driving_groups/LDA/lda4_16m_16n_18m_18n.RData")
 dim(lda_diff_results_2$Species$phyloseq16m@result)
 
 # Initialize a list to store the plots (optional)

@@ -1,6 +1,94 @@
 # All Functions Script 
 
-# Section 1: 
+# Section 1: ANCOMBC 
+
+# Function to get significant taxa, save presence/absence CSV and Venn diagram
+process_tax_level <- function(tax_level, datasets, output_dir = "05_taxa_driving_groups") {
+  
+  sig_taxa_list <- list()
+  venn_anc_plots <- list()
+  
+  for (dataset_name in datasets) {
+    if (!tax_level %in% names(anc_results_trimmed[[dataset_name]])) {
+      message(paste("No", tax_level, "level data for", dataset_name))
+      next
+    }
+    
+    res_obj <- anc_results_trimmed[[dataset_name]][[tax_level]]
+    
+    if (!"res" %in% names(res_obj)) {
+      warning(paste("No 'res' in", dataset_name, tax_level))
+      next
+    }
+    
+    res_df <- res_obj$res %>% filter(`q_(Intercept)` < 0.05)
+    
+    if (nrow(res_df) == 0) {
+      message(paste("No significant taxa for", dataset_name, tax_level))
+      next
+    }
+    
+    q_df <- res_df %>%
+      dplyr::select(taxon, starts_with("q_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "q") %>%
+      dplyr::mutate(group = sub("q_", "", group))
+    
+    diff_df <- res_df %>%
+      dplyr::select(taxon, starts_with("diff_")) %>%
+      pivot_longer(cols = -taxon, names_to = "group", values_to = "diff") %>%
+      dplyr::mutate(group = sub("diff_", "", group))
+    
+    plot_df <- left_join(q_df, diff_df, by = c("taxon", "group")) %>%
+      filter(diff == TRUE, q < 0.05)
+    
+    if (nrow(plot_df) == 0) {
+      message(paste("No significant diff taxa for", dataset_name, tax_level))
+      next
+    }
+    
+    sig_taxa_list[[dataset_name]] <- unique(plot_df$taxon)
+  }
+  
+  # Make presence/absence dataframe
+  all_taxa <- unique(unlist(sig_taxa_list))
+  presence_absence_df <- sapply(sig_taxa_list, function(taxa) all_taxa %in% taxa)
+  presence_absence_df <- as.data.frame(presence_absence_df)
+  presence_absence_df$taxon <- all_taxa
+  presence_absence_df <- presence_absence_df %>% dplyr::select(taxon, everything())
+  
+  # Save CSV
+  csv_path <- file.path(output_dir, paste0(tax_level, "_level_significant_taxa_presence.csv"))
+  write.csv(presence_absence_df, csv_path, row.names = FALSE)
+  message(paste("CSV saved for", tax_level, "level at:", csv_path))
+  
+  # Venn diagram (only works well for up to 5 sets)
+  if (length(sig_taxa_list) >= 2 && length(sig_taxa_list) <= 5) {
+    venn_plot <- venn.diagram(
+      x = sig_taxa_list,
+      category.names = names(sig_taxa_list),
+      filename = NULL,
+      output = TRUE,
+      imagetype = "png",
+      height = 500,
+      width = 650,
+      resolution = 300,
+      fill = rainbow(length(sig_taxa_list)),
+      alpha = 0.5,
+      main.cex = 1.5,
+      cat.cex = 1.1,
+      main = paste(tax_level, "level"))
+    
+    venn_anc_plots[[dataset_name]] <- venn_plot
+    png_path <- file.path(output_dir, paste0(tax_level, "_level_significant_taxa_venn.png"))
+    png(png_path, height = 800, width = 1800, res = 300)
+    grid.draw(venn_plot)
+    dev.off()
+    message(paste("Venn diagram saved for", tax_level, "level at:", png_path))
+  } else {
+    message("Venn diagram skipped: need 2-5 datasets with significant taxa at ", tax_level, " level.")
+  }
+  return(venn_anc_plots)
+}
 
 # Sections 2: 
 
@@ -115,10 +203,12 @@ plotdiffbox <- function(obj, sampleda, factorNames,
 
 ### Microbiome Process full ggdiffbox funxtion ###
 
-ggdiffbox <- function(obj, geom = "boxplot", 
+ggdiffbox <- function(obj, 
+                      colorlist, 
+                      geom = "boxplot", 
                       box_notch = TRUE, box_width = 0.05, dodge_width = 0.6,
                       addLDA = TRUE, factorLevels = NULL, featurelist = NULL,
-                      removeUnknown = TRUE, colorlist = NULL, l_xlabtext = NULL, ...) {
+                      removeUnknown = TRUE, l_xlabtext = NULL, ...) {
   
   featureda <- obj@originalD
   classname <- extract_args(obj, "classgroup")
@@ -130,6 +220,19 @@ ggdiffbox <- function(obj, geom = "boxplot",
   
   sampleda <- obj@sampleda
   tmpgroup <- unique(as.vector(sampleda[[classname]]))
+  
+  # Validate `colorlist` is a named character vector and includes all group names
+  if (!is.character(colorlist) || is.null(names(colorlist))) {
+    stop("`colorlist` must be a named character vector of colors (e.g., c('Captive'='#00AED7', ...))")
+  }
+  
+  missing_groups <- setdiff(tmpgroup, names(colorlist))
+  if (length(missing_groups) > 0) {
+    stop("`colorlist` is missing colors for group(s): ", paste(missing_groups, collapse = ", "))
+  }
+  
+  # Ensure correct order (matching group levels)
+  colorlist <- colorlist[tmpgroup]
   
   nodedfres <- obj@result
   nodedfres <- set_newlevels(data = nodedfres, newlevels = tmpgroup, factorNames = classname)
@@ -152,13 +255,6 @@ ggdiffbox <- function(obj, geom = "boxplot",
   
   featureda <- featureda[, match(featurelist, colnames(featureda)), drop = FALSE]
   
-  if (is.null(colorlist)) {
-    colorlist <- get_cols(length(tmpgroup))
-  }
-  if (is.null(names(colorlist))) {
-    names(colorlist) <- tmpgroup
-  }
-  
   if (is.null(extract_args(obj, "standard_method"))) {
     if (is.null(l_xlabtext)) {
       xlabtext <- "abundance"
@@ -171,10 +267,12 @@ ggdiffbox <- function(obj, geom = "boxplot",
   
   p <- plotdiffbox(obj = featureda, sampleda = sampleda, factorNames = classname, 
                    factorLevels = factorLevels, featurelist = featurelist, 
-                   geom = geom, box_notch = box_notch, dodge_width = dodge_width, 
+                   #geom = geom, 
+                   box_notch = box_notch, dodge_width = dodge_width, 
                    box_width = box_width) +
     coord_flip() +
-    scale_fill_manual(values = colorlist) +
+    scale_color_manual(values = colorlist) +
+    #scale_fill_manual(values = colorlist) +
     ylab(xlabtext)
   
   if (addLDA) {
