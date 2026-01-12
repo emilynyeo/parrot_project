@@ -12,22 +12,22 @@ All analysis scripts are located in the `MelissaAnalysis/` folder. The repositor
 
 ### Active Scripts (Current Pipeline)
 
-| Script | Description | Author |
-|--------|-------------|--------|
-| **01.1_EY_process_and_clean_data.R** | Processes and cleans raw sequence data | Emily |
-| **01.2_EY_name_qc_process.R** | Quality control filtering, creates filtered phyloseq objects | Emily |
-| **02.2_EY_split_18_classes.R** | Splits 18S data into different eukaryotic classes | Emily |
-| **03.2_EY_alpha_diversity.R** | Analyzes alpha diversity between groups | Emily |
-| **04.2_EY_beta_diversity.R** | Analyzes beta diversity between groups | Emily |
-| **05_EY_ANCOMBC.R** | ANCOMBC2 differential abundance analysis | Emily |
-| **05_EY_LDA.R** | LDA differential analysis | Emily |
-| **05_EY_Combine_LDA_ANCOMBC.R** | Combines LDA and ANCOMBC results | Emily |
-| **05.2_pcoa_levels.R** | PCoA analysis at different taxonomic levels | Emily |
-| **06_EY_grp_prediction_models.R** | Prediction models for group classification | Emily |
-| **06_EY_grp_prediction_models_18s.R** | 18S-specific prediction models | Emily |
-| **06.2_qc_group_pred_models.R** | Quality control for prediction models | Emily |
-| **paper_plots.Rmd** | Generates all figures for the paper | Emily |
-| **utils.R** | Utility functions used across scripts | Emily |
+| Script | Description |
+|--------|-------------|
+| **01.1_EY_process_and_clean_data.R** | Processes and cleans raw sequence data |
+| **01.2_EY_name_qc_process.R** | Quality control filtering, creates filtered phyloseq objects |
+| **02.2_EY_split_18_classes.R** | Splits 18S data into different eukaryotic classes |
+| **03.2_EY_alpha_diversity.R** | Analyzes alpha diversity between groups |
+| **04.2_EY_beta_diversity.R** | Analyzes beta diversity between groups |
+| **05_EY_ANCOMBC.R** | ANCOMBC2 differential abundance analysis |
+| **05_EY_LDA.R** | LDA differential analysis |
+| **05_EY_Combine_LDA_ANCOMBC.R** | Combines LDA and ANCOMBC results |
+| **05.2_pcoa_levels.R** | PCoA analysis at different taxonomic levels |
+| **06_EY_grp_prediction_models.R** | Prediction models for group classification |
+| **06_EY_grp_prediction_models_18s.R** | 18S-specific prediction models |
+| **06.2_qc_group_pred_models.R** | Quality control for prediction models |
+| **paper_plots.Rmd** | Generates all figures for the paper |
+| **utils.R** | Utility functions used across scripts |
 
 ### Archived Scripts
 
@@ -36,9 +36,9 @@ All analysis scripts are located in the `MelissaAnalysis/` folder. The repositor
 
 ---
 
-## Analysis Pipeline Flow
+## Analysis Flow
 
-The following diagram shows how scripts and data files are connected in the main analysis pipeline:
+The following diagram shows how scripts and data files are connected in the main analysis:
 
 ```
 Raw Data
@@ -107,7 +107,7 @@ Raw Data
 
 ---
 
-## Main Pipeline for Figures Script 
+## Main Upstream Scripts for the Figures Script 
 
 To generate all figures for the paper, run these scripts in order:
 
@@ -139,7 +139,6 @@ To generate all figures for the paper, run these scripts in order:
    - Requires all files from Steps 1-2
    - Uses `utils.R` for helper functions
 
-For detailed information about dependencies, see `MelissaAnalysis/paper_plots_dependencies.md`.
 
 ---
 
@@ -147,7 +146,7 @@ For detailed information about dependencies, see `MelissaAnalysis/paper_plots_de
 
 1. Clone this repository:
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/emilynyeo/parrot_project.git
    ```
 
 2. Navigate to the project directory:
@@ -175,13 +174,6 @@ For detailed information about dependencies, see `MelissaAnalysis/paper_plots_de
 - **ANCOMBC and LDA** scripts depend on filtered phyloseq objects
 - **Prediction models** depend on filtered phyloseq objects
 - **Paper plots** depend on ANCOMBC and LDA results
-
----
-
-## References
-
-- See the `papers/` directory for literature
-  - *coda4microbiome: compositional data analysis for microbiome cross‑sectional and longitudinal studies.pdf*
 
 ---
 
