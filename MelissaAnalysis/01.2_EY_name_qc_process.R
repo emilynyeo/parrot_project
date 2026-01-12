@@ -32,10 +32,11 @@ esv_18 <- read.csv("./00_sequence_data/JVB3218_18S_616/JVB3218-18S_616-esv-data.
 reads_18 <- read.csv("./00_sequence_data/JVB3218_18S_616/JVB3218-18S_616-read-data.csv")
 samples_18 <- read.csv("./00_sequence_data/JVB3218_18S_616/JVB3218-samples.csv")
 
-# Remove odd looking samples S082895 and S082806
-colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16)) # Make it start with capital S
+# Make it start with capital S
+colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16)) 
 colnames(reads_18) <- gsub("^s0","S0", colnames(reads_18)) 
 
+# Remove odd looking samples S082895 and S082806
 reads16 <- reads_16 %>% dplyr::select(!starts_with("S082895")) %>% select(!(starts_with("S082806")))
 reads18 <- reads_18 %>% dplyr::select(!starts_with("S082895")) %>% select(!(starts_with("S082806")))
 

@@ -8,8 +8,10 @@ library(tidyverse)
 library(phyloseq)
 library(lubridate)
 
-
-dir.create("01_process_and_clean_data")
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
+if (!dir.exists("01_process_and_clean_data")) {
+  dir.create("01_process_and_clean_data")
+}
 
 #### Load data ####
 # Original dataset

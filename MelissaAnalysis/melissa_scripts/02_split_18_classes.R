@@ -2,6 +2,7 @@
 library(phyloseq)
 library(tidyverse)
 
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 dir.create("02_split_18_classes")
 
 load("01_process_and_clean_data/phyloseq18n.rds")

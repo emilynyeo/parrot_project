@@ -8,7 +8,11 @@ library(phyloseq)
 library(tibble)
 library(tidyverse)
 library(ggpubr)
-dir.create("03_alpha_diversity")
+
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
+if (!dir.exists("03_alpha_diversity")) {
+  dir.create("03_alpha_diversity")
+}
 #### Load data ####
 # Also converting to matrices with rownames for phyloseq
 

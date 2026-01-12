@@ -7,7 +7,10 @@ library(phyloseq)
 library(tibble)
 library(tidyverse)
 
-#dir.create("04_beta_diversity")
+setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
+if (!dir.exists("04_beta_diversity")) {
+  dir.create("04_beta_diversity")
+}
 #### Load data ####
 # Also converting to matrices with rownames for phyloseq
 
