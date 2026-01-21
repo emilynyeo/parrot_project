@@ -14,8 +14,7 @@ All analysis scripts are located in the `MelissaAnalysis/` folder. The repositor
 
 | Script | Description |
 |--------|-------------|
-| **01.1_EY_process_and_clean_data.R** | Processes and cleans raw sequence data |
-| **01.2_EY_name_qc_process.R** | Quality control filtering, creates filtered phyloseq objects |
+| **01.2_EY_name_qc_process.R** | Processes raw sequence data, performs quality control filtering, creates filtered phyloseq objects |
 | **02.2_EY_split_18_classes.R** | Splits 18S data into different eukaryotic classes |
 | **03.2_EY_alpha_diversity.R** | Analyzes alpha diversity between groups |
 | **04.2_EY_beta_diversity.R** | Analyzes beta diversity between groups |
@@ -47,15 +46,13 @@ Raw Data
   |-- 00_sequence_data/     (Raw sequence files: 16S, 18S)
   |
   |
-[01.1_EY_process_and_clean_data.R]
-  |
-  |-- Creates initial phyloseq objects
-  |-- Outputs to: 01_process_and_clean_data/
-  |
-  |
 [01.2_EY_name_qc_process.R]
   |
-  |-- Quality control filtering
+  |-- Processes raw sequence data
+  |-- Removes problematic samples (S082895, S082806)
+  |-- Filters host DNA, chloroplasts, mitochondria
+  |-- Performs quality control filtering
+  |-- Creates coverage analysis plots
   |-- Outputs to: 01.1_qc_checks/
   |   * phyloseq_otu16m_mat_filt_20_thr10.rds
   |   * phyloseq_otu16n_mat_filt_20_thr10.rds
@@ -112,14 +109,12 @@ Raw Data
 To generate all figures for the paper, run these scripts in order:
 
 ### Step 1: Data Processing & QC
-1. **`01.1_EY_process_and_clean_data.R`**
-   - Processes raw sequence data
-   - Creates initial phyloseq objects
-   - Outputs to `01_process_and_clean_data/`
-
-2. **`01.2_EY_name_qc_process.R`**
-   - Performs quality control filtering
-   - Creates filtered phyloseq objects with various thresholds
+1. **`01.2_EY_name_qc_process.R`**
+   - Processes raw sequence data from `00_sequence_data/` and `00_metadata/`
+   - Removes problematic samples (S082895, S082806)
+   - Filters host DNA, chloroplasts, and mitochondria
+   - Performs quality control filtering with multiple thresholds
+   - Creates coverage analysis plots
    - Outputs the 4 required phyloseq RDS files to `01.1_qc_checks/`
 
 ### Step 2: Differential Abundance Analysis
