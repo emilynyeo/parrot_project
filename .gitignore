@@ -13,5 +13,7 @@
 *.rds
 *.xlsx
 *.RData
+*.pdf
 *.log
 emye_analysis/
+*/01.2_processing_steps.md

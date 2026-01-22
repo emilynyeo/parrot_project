@@ -4,7 +4,7 @@
 pacman::p_load(tidyverse, vegan, MASS, phyloseq, tibble, ANCOMBC, ggplot2, coin,
                MicrobiotaProcess, patchwork, reshape2, ggnewscale, VennDiagram,
                UpSetR, gridExtra, grid, WGCNA, indicspecies, lubridate, scales,
-               calecopal)
+               calecopal, dplyr)
 
 setwd("/Users/emily/projects/research/parrot_project/MelissaAnalysis")
 
@@ -19,9 +19,9 @@ meta1 <- read.csv("./00_metadata/ParrotFecalSampleMetadata_SerialIDs_McKenzie.cs
 addmeta <- read.csv("./00_metadata/additional_info_seizures.csv")
 meta1 <- left_join(meta1, addmeta) %>%
   unite(serial.prefix, serial.number, sep="", col="SampleId", remove=FALSE) %>%
-  select(SampleId, everything()) %>% 
-  filter(SampleId != "S082895") %>% 
-  filter(SampleId != "S082806")
+  dplyr::select(SampleId, everything()) %>% 
+  dplyr::filter(SampleId != "S082895") %>% 
+  dplyr::filter(SampleId != "S082806")
 
 # NANOPORE AND MISEQ from original runs
 esv_16 <- read.csv("./00_sequence_data/JVB3218_16S/JVB3218-16S-esv-data.csv")
@@ -37,8 +37,8 @@ colnames(reads_16) <- gsub("^s0","S0", colnames(reads_16))
 colnames(reads_18) <- gsub("^s0","S0", colnames(reads_18)) 
 
 # Remove odd looking samples S082895 and S082806
-reads16 <- reads_16 %>% dplyr::select(!starts_with("S082895")) %>% select(!(starts_with("S082806")))
-reads18 <- reads_18 %>% dplyr::select(!starts_with("S082895")) %>% select(!(starts_with("S082806")))
+reads16 <- reads_16 %>% dplyr::select(!starts_with("S082895")) %>%dplyr::select(!(starts_with("S082806")))
+reads18 <- reads_18 %>% dplyr::select(!starts_with("S082895")) %>%dplyr::select(!(starts_with("S082806")))
 
 samples_16 <- samples_16 %>% 
                    dplyr::filter(SampleId != "S082895") %>% 
@@ -49,29 +49,29 @@ samples_18 <- samples_18 %>%
                           filter(SampleId != "S082806")
 
 # Remove zero sum read rows  (the ones ending in 0)
-reads_16 %>% select(ends_with(".0")) %>% colSums()
-reads_18 %>% select(ends_with(".0")) %>% colSums()
+reads_16 %>% dplyr::select(ends_with(".0")) %>% colSums()
+reads_18 %>% dplyr::select(ends_with(".0")) %>% colSums()
 
 # Split reaads into nano and miseq
-otu16m_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".1")) # Run 1 are miseq
-otu16n_df <- reads_16 %>% select(ESVId, starts_with("S0") & ends_with(".2")) # Run 2 is Nano
+otu16m_df <- reads_16 %>% dplyr::select(ESVId, starts_with("S0") & ends_with(".1")) # Run 1 are miseq
+otu16n_df <- reads_16 %>% dplyr::select(ESVId, starts_with("S0") & ends_with(".2")) # Run 2 is Nano
 
-r118 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".1")) %>% colnames() # 344 
-r218 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".2")) %>% colnames() # 340 
-r318 <- reads_18 %>% select(starts_with("S0")) %>% select(ends_with(".3")) %>% colnames() # 12 
+r118 <- reads_18 %>% dplyr::select(starts_with("S0")) %>% dplyr::select(ends_with(".1")) %>% colnames() # 344 
+r218 <- reads_18 %>% dplyr::select(starts_with("S0")) %>% dplyr::select(ends_with(".2")) %>% colnames() # 340 
+r318 <- reads_18 %>% dplyr::select(starts_with("S0")) %>% dplyr::select(ends_with(".3")) %>% colnames() # 12 
 r318_woSuffix <- gsub(".3$","",r318)
 
 otu18m_df <- reads_18 %>%
-  select(ESVId, (starts_with("S0") & (ends_with(".1") | one_of(paste0(r318_woSuffix,".2"))))) %>%
-  select(-one_of(paste0(r318_woSuffix,".1")))
+  dplyr::select(ESVId, (starts_with("S0") & (ends_with(".1") | one_of(paste0(r318_woSuffix,".2"))))) %>%
+  dplyr::select(-one_of(paste0(r318_woSuffix,".1")))
 
 otu18n_df <- reads_18 %>%
-  select(ESVId, (starts_with("S0") & (ends_with(".2") | one_of(paste0(r318_woSuffix,".3"))))) %>%
-  select(-one_of(paste0(r318_woSuffix,".2")))
+  dplyr::select(ESVId, (starts_with("S0") & (ends_with(".2") | one_of(paste0(r318_woSuffix,".3"))))) %>%
+  dplyr::select(-one_of(paste0(r318_woSuffix,".2")))
 
 # Remove zero sum read rows  (the ones ending in 0)
-reads_16 %>% select(ends_with(".0")) %>% colSums()
-reads_18 %>% select(ends_with(".0")) %>% colSums()
+reads_16 %>% dplyr::select(ends_with(".0")) %>% colSums()
+reads_18 %>% dplyr::select(ends_with(".0")) %>% colSums()
 
 table(rowSums(otu16m_df[,-1])>0)
 otu16m_df <- otu16m_df[rowSums(otu16m_df[,-1])>0,] # 16 miseq 3638 removed
@@ -134,7 +134,7 @@ meta_adj <- meta1 %>%
 
 # Standardize date format
 meta_adj$Date.collected
-meta_adj %>% select(Country, Date.collected) %>% table()
+meta_adj %>% dplyr::select(Country, Date.collected) %>% table()
 
 # Dashes look like SA dates (MM-DD-YYYY) whereas Nigerian = DD/MM/YY: Let's fix those...
 reformatDates <- as.data.frame(matrix(nrow=length(meta_adj$Date.collected), 
@@ -168,9 +168,9 @@ meta_adj$Seized.date <- ymd(as.Date(meta_adj$Seized.date, format = "%d-%m-%Y"))
 meta_adj <- meta_adj %>% mutate(TimeSinceSeizure = as.Date(DateAdj)-Seized.date)
 
 ### Taxonomic Assignments ### 
-#tax16 <- reads_16 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
+#tax16 <- reads_16 %>%dplyr::select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
 tax16 <- reads_16 %>% 
-  select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
+ dplyr::select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
   mutate(ScientificName = ifelse(Species!="", paste0(Genus, " ", Species),
                                  ifelse(Genus !="", paste0("Genus:", Genus),
                                         ifelse(Family!="", paste0("Family:", Family),
@@ -190,8 +190,8 @@ tax16 <- reads_16 %>%
 tax16m <- tax16 %>% filter(ESVId %in% otu16m_df$ESVId)
 tax16n <- tax16 %>% filter(ESVId %in% otu16n_df$ESVId)
 
-#tax18 <- reads_18 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
-tax18 <- reads_18 %>% select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>% 
+#tax18 <- reads_18 %>%dplyr::select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
+tax18 <- reads_18 %>%dplyr::select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>% 
   mutate(ScientificName = ifelse(Species!="", paste0(Genus, " ", gsub("_"," ", Species)),
                                  ifelse((Genus !="") & (Genus!=Family), paste0("Genus:", Genus),
                                         ifelse((Family!="")& (Family!=Order), paste0("Family:", Family),
@@ -468,7 +468,7 @@ for (i in seq_len(nrow(all_df_info))) {
   
   esv_phyloseq_temp <- esv_final_temp %>%
     mutate(Species = ScientificName) %>%
-    select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
+   dplyr::select(ESVId, Kingdom, Phylum, Class, Order, Family, Genus, Species) %>%
     column_to_rownames(var="ESVId") %>% as.matrix()
   
   tax_tab <- phyloseq::tax_table(as.matrix(esv_phyloseq_temp))
@@ -483,7 +483,7 @@ for (i in seq_len(nrow(all_df_info))) {
   reads_df <- reads_lookup[[base_name]]
   seq_temp <- reads_df %>%
     filter(ESVId %in% rownames(df)) %>%
-    select(ESVId, sequence)
+   dplyr::select(ESVId, sequence)
   cat("Number of sequences retained:", nrow(seq_temp), "\n")
   
   ####### R versions #############

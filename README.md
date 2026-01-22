@@ -28,6 +28,19 @@ All analysis scripts are located in the `MelissaAnalysis/` folder. The repositor
 | **paper_plots.Rmd** | Generates all figures for the paper |
 | **utils.R** | Utility functions used across scripts |
 
+### Binary Analysis Scripts (Captive vs Wild Comparison)
+
+These scripts perform binary comparisons between Captive and Wild (free ranging) groups, excluding "Wild, seized from traffickers" samples:
+
+| Script | Description |
+|--------|-------------|
+| **`binary_scripts/02.2_EY_split_classes.R`** | Flexible version that accepts a list of phyloseq objects and processes both 16S and 18S data, splitting into classes (plants, microeukaryotes, nohost) |
+| **`binary_scripts/05_LDA_BINARY.R`** | LDA differential analysis for binary comparison (Captive vs Wild, excluding seized samples). Accepts a list of phyloseq objects. |
+| **`binary_scripts/06_ANCOMBC_BINARY.R`** | ANCOMBC2 differential abundance analysis for binary comparison (Captive vs Wild, excluding seized samples). Accepts a list of phyloseq objects. |
+| **`binary_scripts/07_Combine_LDA_ANCOMBC_BINARY.R`** | Combines binary LDA and ANCOMBC results for visualization. Processes all available dataset/taxonomic level combinations and saves input data as CSVs. |
+
+**Note:** Each binary script has a corresponding `*_EXAMPLE.R` file showing usage.
+
 ### Archived Scripts
 
 - **`melissa_scripts/`** - Original scripts by Mel (archived for reference)
@@ -91,6 +104,21 @@ Raw Data
   |     (QC for prediction models)
   |
   |
+  +---> [binary_scripts/] (Binary Analysis Pipeline)
+  |     |
+  |     +---> [02.2_EY_split_classes.R] --> 02_split_18_classes/
+  |     |     (Flexible class splitting for lists of phyloseq objects)
+  |     |
+  |     +---> [05_LDA_BINARY.R] --> 05_taxa_driving_groups/LDA/binary/
+  |     |     (Binary LDA: Captive vs Wild, excluding seized)
+  |     |
+  |     +---> [06_ANCOMBC_BINARY.R] --> 05_taxa_driving_groups/ANCOMBC/binary/
+  |     |     (Binary ANCOMBC: Captive vs Wild, excluding seized)
+  |     |
+  |     +---> [07_Combine_LDA_ANCOMBC_BINARY.R] --> 05_taxa_driving_groups/combined_lda_ancombc/binary/
+  |           (Combines binary LDA and ANCOMBC results, saves CSVs)
+  |
+  |
 [paper_plots.Rmd]
   |
   |-- Requires:
@@ -134,6 +162,39 @@ To generate all figures for the paper, run these scripts in order:
    - Requires all files from Steps 1-2
    - Uses `utils.R` for helper functions
 
+---
+
+## Binary Analysis Pipeline (Captive vs Wild)
+
+For binary comparisons excluding "Wild, seized from traffickers" samples, use the scripts in `binary_scripts/`:
+
+### Step 1: Load Phyloseq Objects
+Load your phyloseq objects (from `01.1_qc_checks/`) into a named list. See `*_EXAMPLE.R` files for usage.
+
+### Step 2: Run Binary Differential Analysis
+1. **`binary_scripts/05_LDA_BINARY.R`**
+   - Performs LDA analysis for binary comparison
+   - Filters out "Wild, seized from traffickers" samples
+   - Analyzes at Family, Genus, and Species levels
+   - Outputs: `05_taxa_driving_groups/LDA/binary/lda_binary_results.RData`
+
+2. **`binary_scripts/06_ANCOMBC_BINARY.R`**
+   - Performs ANCOMBC2 analysis for binary comparison
+   - Filters out "Wild, seized from traffickers" samples
+   - Analyzes at Family, Genus, and Species levels
+   - Outputs: `05_taxa_driving_groups/ANCOMBC/binary/ancombc_binary_results.RData`
+
+### Step 3: Combine and Visualize Results
+3. **`binary_scripts/07_Combine_LDA_ANCOMBC_BINARY.R`**
+   - Combines LDA and ANCOMBC binary results
+   - Processes all available dataset/taxonomic level combinations
+   - Creates combined visualizations
+   - Saves input data as CSVs with descriptive filenames:
+     * `LDA_ANCOMBC_[dataset]_[tax_level]_LDA_input_data.csv`
+     * `LDA_ANCOMBC_[dataset]_[tax_level]_ANCOMBC_input_data.csv`
+     * `LDA_ANCOMBC_[dataset]_[tax_level]_combined_LDA_ANCOMBC.csv`
+     * `LDA_ANCOMBC_[dataset]_[tax_level]_feature_overlap.csv` (only overlapping features)
+   - Outputs plots: `*_combined_plot.png` and `*_separate_plots_p1_p2_p3.png`
 
 ---
 
