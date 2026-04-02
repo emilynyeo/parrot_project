@@ -41,7 +41,10 @@ location_legend <- c(Nigeria ="goldenrod4",`South Africa`="darkred")
 set.seed(423)
 phylo16n_ord <- ordinate(phyloseq16n, method = "NMDS", distance = "bray")
 
-gg_bray16n_captivetube <- plot_ordination(phyloseq16n, phylo16n_ord, type = "samples", color = "Captive.Wild", shape = "Tube.type")+
+gg_bray16n_captivetube <- plot_ordination(phyloseq16n, phylo16n_ord, 
+                                          type = "samples", 
+                                          color = "Captive.Wild", 
+                                          shape = "Tube.type")+
   scale_shape_manual(values=c(19,21)) +
   scale_color_manual(values=captivewild_legend)+
   labs(subtitle=paste0("Bacteria (Stress: ", round(phylo16n_ord$stress, 2),")")) +
